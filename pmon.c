@@ -28,7 +28,6 @@
 #include <linux/mtd/map.h>
 #include <linux/mtd/partitions.h>
 
-
 #define FLASH_PHYS_ADDR 0x1fc00000
 #define FLASH_SIZE 0x080000
 

@@ -30,6 +30,7 @@
 #include <linux/timer.h>
 #include <asm/delay.h>
 #include "ec.h"
+#include "ver.h"
 
 /************************************************************************/
 
@@ -45,7 +46,7 @@ static DEFINE_MUTEX(ft_info_lock);
 extern spinlock_t ec_access_lock;
 
 /* driver version */
-static const char driver_version[] = "1.20";
+static const char driver_version[] = VERSION;
 
 /* fan speed divider */
 #define	FAN_SPEED_DIVIDER		480000  // (60 * 1000 * 1000 / 62.5 / 2)

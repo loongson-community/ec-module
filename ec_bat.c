@@ -29,6 +29,7 @@
 #include <linux/timer.h>
 #include <asm/delay.h>
 #include "ec.h"
+#include "ver.h"
 
 
 /************************************************************************/
@@ -151,7 +152,7 @@ struct bat_info {
  *	1, bat_flag is added to struct bat_info.
  *	2, BAT_MIN_THRESHOLD is changed to 5%.
  */
-static const char driver_version[] = "1.20";	/* no spaces */
+static const char driver_version[] = VERSION;	/* no spaces */
 
 static struct miscdevice apm_device = {
 	.minor		= ECBAT_MINOR_DEV,
