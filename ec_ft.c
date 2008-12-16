@@ -80,14 +80,20 @@ static struct miscdevice ft_device = {
 };
 
 #ifdef	CONFIG_PROC_FS
-static ssize_t ft_proc_read(struct file *file, char *buf, size_t len, loff_t *ppos);
+//static ssize_t ft_proc_read(struct file *file, char *buf, size_t len, loff_t *ppos);
+static int ft_proc_read(char *page, char **start, off_t off, int count, int *eof, void *data);
 static struct proc_dir_entry *ft_proc_entry;
+
+#if 0
 static struct file_operations ft_proc_fops = {
 	owner :	THIS_MODULE,
 	read  : ft_proc_read,
 	write : NULL,
 };
-static ssize_t ft_proc_read(struct file *file, char *buf, size_t len, loff_t *ppos)
+#endif
+
+//static ssize_t ft_proc_read(struct file *file, char *buf, size_t len, loff_t *ppos)
+static int ft_proc_read(char *page, char **start, off_t off, int count, int *eof, void *data)
 {
 	struct ft_info info;
 	int ret;
@@ -101,9 +107,24 @@ static ssize_t ft_proc_read(struct file *file, char *buf, size_t len, loff_t *pp
 	info.temperature_pn = ft_info.temperature_pn;
 	info.temperature	= ft_info.temperature;
 	mutex_unlock(&ft_info_lock);
-
+#if 0
 	ret = sprintf(buf, "%s 0x%02x %d 0x%02x %d\n", driver_version, info.fan_on, 
 			 info.fan_speed, info.temperature_pn, info.temperature);
+
+	return ret;
+#endif
+
+	ret = sprintf(page, "%s 0x%02x %d 0x%02x %d\n", driver_version, info.fan_on, info.fan_speed, info.temperature_pn, info.temperature);
+
+	ret -= off;
+	if(ret < off + count){
+		*eof = 1;
+	}
+	*start = page + off;
+	if(ret > count)
+		ret = count;
+	if(ret < 0)
+		ret = 0;
 
 	return ret;
 }
@@ -176,7 +197,10 @@ static int __init ft_init(void)
 		return -EINVAL;
 	}
 	ft_proc_entry->owner = THIS_MODULE;
-	ft_proc_entry->proc_fops = &ft_proc_fops;
+	//ft_proc_entry->proc_fops = &ft_proc_fops;
+	ft_proc_entry->read_proc = ft_proc_read;
+	ft_proc_entry->write_proc = NULL;
+	ft_proc_entry->data = NULL;
 #endif
 
 	ret = misc_register(&ft_device);

@@ -86,7 +86,8 @@ static int ec_read_byte(u32 addr, u8 *byte)
 	ec_write(REG_XBISPIA1, (addr & 0x00ff00) >> 8);
 	ec_write(REG_XBISPIA0, (addr & 0x0000ff) >> 0);
 	/* start action */
-	ec_write(REG_XBISPICMD, SPICMD_READ_BYTE);
+	//ec_write(REG_XBISPICMD, SPICMD_READ_BYTE);
+	ec_write(REG_XBISPICMD, SPICMD_HIGH_SPEED_READ);
 	timeout = EC_FLASH_TIMEOUT;
 	while(timeout-- >= 0){
 		if( !(ec_read(REG_XBISPICFG) & SPICFG_SPI_BUSY) )
@@ -219,6 +220,7 @@ static int ec_unit_erase(u8 erase_cmd, u32 addr)
 	return 0;
 }
 
+#if 0
 static ssize_t misc_read(struct file *file, char __user *buf, size_t count, loff_t *ppos)
 {
 	return 0;
@@ -228,6 +230,7 @@ static ssize_t misc_write(struct file *file, const char __user *buf, size_t coun
 {
 	return 0;
 }
+#endif
 
 static int misc_ioctl(struct inode * inode, struct file *filp, u_int cmd, u_long arg)
 {
@@ -393,7 +396,7 @@ static struct file_operations ecmisc_fops = {
 	.read		= NULL,
 	.write		= NULL,
 #ifdef	CONFIG_64BIT
-	.compat_ioctl		= misc_compat_ioctl,
+	.compat_ioctl = misc_compat_ioctl,
 #else
 	.ioctl		= misc_ioctl,
 #endif

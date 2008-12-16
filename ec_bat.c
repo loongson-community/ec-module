@@ -161,15 +161,19 @@ static struct miscdevice apm_device = {
 };
 
 #ifdef	CONFIG_PROC_FS
-static ssize_t bat_proc_read(struct file *file, char *buf, size_t len, loff_t *ppos);
+//static ssize_t bat_proc_read(struct file *file, char *buf, size_t len, loff_t *ppos);
+static int bat_proc_read(char *page, char **start, off_t off, int count, int *eof, void *data);
 static struct proc_dir_entry *bat_proc_entry;
+#if 0
 static struct file_operations bat_proc_fops = {
 	owner :	THIS_MODULE,
 	read  : bat_proc_read,
 	write : NULL,
 };
+#endif
 
-static ssize_t bat_proc_read(struct file *file, char *buf, size_t len, loff_t *ppos)
+//static ssize_t bat_proc_read(struct file *file, char *buf, size_t len, loff_t *ppos)
+static int bat_proc_read(char *page, char **start, off_t off, int count, int *eof, void *data)
 {
 	struct apm_pwr_info info;
 	char *units;
@@ -209,12 +213,23 @@ static ssize_t bat_proc_read(struct file *file, char *buf, size_t len, loff_t *p
 	case 1: 	units = "sec";	break;
 	}
 
-	ret = sprintf(buf, "%s 1.2 0x%02x 0x%02x 0x%02x 0x%02x %d%% %d %s %dmV %dmA %d\n",
+	ret = sprintf(page/*buf*/, "%s 1.2 0x%02x 0x%02x 0x%02x 0x%02x %d%% %d %s %dmV %dmA %d\n",
 		     driver_version, APM_32_BIT_SUPPORT,
 		     info.ac_line_status, info.battery_status,
 		     info.battery_flag, info.battery_life,
 		     info.time, units, info.bat_voltage, 
 		     info.bat_current, info.bat_temperature);
+
+	ret -= off;
+	if(ret < off + count){
+		*eof = 1;
+	}
+	*start = page + off;
+	if(ret > count)
+		ret = count;
+	if(ret < 0)
+		ret = 0;
+
 	return ret;
 }
 #endif
@@ -362,7 +377,10 @@ static int __init apm_init(void)
 		return -EINVAL;
 	}
 	bat_proc_entry->owner = THIS_MODULE;
-	bat_proc_entry->proc_fops = &bat_proc_fops;
+	//bat_proc_entry->proc_fops = &bat_proc_fops;
+	bat_proc_entry->read_proc = bat_proc_read;
+	bat_proc_entry->write_proc = NULL;
+	bat_proc_entry->data = NULL;
 #endif
 
 	ret = misc_register(&apm_device);
