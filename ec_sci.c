@@ -453,37 +453,69 @@ static int sci_parse_num(struct sci_device *sci_device)
 			spin_lock_irqsave(&ec_access_lock, flags);
 			sci_device->sci_num_array[SCI_INDEX_LID] = ec_read(REG_LID_DETECT);
 			spin_unlock_irqrestore(&ec_access_lock, flags);
+			sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_DEC] = 0;
+			sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_INC] = 0;
+			sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_INC] = 0;
+			sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_DEC] = 0;
 			break;
 		case	SCI_EVENT_NUM_DISPLAY_TOGGLE :
 			sci_device->sci_num_array[SCI_INDEX_DISPLAY_TOGGLE]^= 0x01;
+			sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_DEC] = 0;
+			sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_INC] = 0;
+			sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_INC] = 0;
+			sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_DEC] = 0;
 			break;
 		case	SCI_EVENT_NUM_SLEEP :
 			sci_device->sci_num_array[SCI_INDEX_SLEEP] ^= 0x01;
+			sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_DEC] = 0;
+			sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_INC] = 0;
+			sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_INC] = 0;
+			sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_DEC] = 0;
 			break;
 		case	SCI_EVENT_NUM_OVERTEMP :
 			spin_lock_irqsave(&ec_access_lock, flags);
 			sci_device->sci_num_array[SCI_INDEX_OVERTEMP] = (ec_read(REG_BAT_CHARGE_STATUS) & BIT_BAT_CHARGE_STATUS_OVERTEMP) >> 2;
 			spin_unlock_irqrestore(&ec_access_lock, flags);
+			sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_DEC] = 0;
+			sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_INC] = 0;
+			sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_INC] = 0;
+			sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_DEC] = 0;
 			break;
 		case	SCI_EVENT_NUM_CRT_DETECT :
 			spin_lock_irqsave(&ec_access_lock, flags);
 			sci_device->sci_num_array[SCI_INDEX_CRT_DETECT] = ec_read(REG_CRT_DETECT);
 			spin_unlock_irqrestore(&ec_access_lock, flags);
+			sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_DEC] = 0;
+			sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_INC] = 0;
+			sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_INC] = 0;
+			sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_DEC] = 0;
 			break;
 		case	SCI_EVENT_NUM_CAMERA :
 			spin_lock_irqsave(&ec_access_lock, flags);
 			sci_device->sci_num_array[SCI_INDEX_CAMERA] = ec_read(REG_CAMERA_STATUS);
 			spin_unlock_irqrestore(&ec_access_lock, flags);
+			sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_DEC] = 0;
+			sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_INC] = 0;
+			sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_INC] = 0;
+			sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_DEC] = 0;
 			break;
 		case	SCI_EVENT_NUM_USB_OC2 :
 			spin_lock_irqsave(&ec_access_lock, flags);
 			sci_device->sci_num_array[SCI_INDEX_USB_OC2] = ec_read(REG_USB2_FLAG);
 			spin_unlock_irqrestore(&ec_access_lock, flags);
+			sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_DEC] = 0;
+			sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_INC] = 0;
+			sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_INC] = 0;
+			sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_DEC] = 0;
 			break;
 		case	SCI_EVENT_NUM_USB_OC0 :
 			spin_lock_irqsave(&ec_access_lock, flags);
 			sci_device->sci_num_array[SCI_INDEX_USB_OC0] = ec_read(REG_USB0_FLAG);
 			spin_unlock_irqrestore(&ec_access_lock, flags);
+			sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_DEC] = 0;
+			sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_INC] = 0;
+			sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_INC] = 0;
+			sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_DEC] = 0;
 			break;
 		case	SCI_EVENT_NUM_AC_BAT :
 			spin_lock_irqsave(&ec_access_lock, flags);
@@ -525,14 +557,18 @@ static int sci_parse_num(struct sci_device *sci_device)
 			}else{
 				sci_device->sci_num_array[SCI_INDEX_AC_BAT] &= ~(1 << BIT_AC_BAT_BAT_FULL);
 			}
-
 			spin_unlock_irqrestore(&ec_access_lock,flags);
+
+			sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_DEC] = 0;
+			sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_INC] = 0;
+			sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_INC] = 0;
+			sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_DEC] = 0;
 			break;
 		case	SCI_EVENT_NUM_DISPLAY_BRIGHTNESS :
 			spin_lock_irqsave(&ec_access_lock, flags);
 #if 1
-			//printk("bri_value[0]:0x%02x, vol_value[1]:0x%02x\n", sci_device->sci_init_value[0], sci_device->sci_init_value[1]);
 			val = ec_read(REG_DISPLAY_BRIGHTNESS);
+			spin_unlock_irqrestore(&ec_access_lock, flags);
 			if( (val == 0x00) || (val < sci_device->sci_init_value[0]) ){
 				sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_DEC] = 1;
 				sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_INC] = 0;
@@ -546,14 +582,13 @@ static int sci_parse_num(struct sci_device *sci_device)
 				sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_DEC] = 0;
 				sci_device->sci_init_value[0] =  val;
 			}
-			//printk("backlight_status 1 : 0x%02x, value[0]:0x%02x, value[1]:0x%02x\n", val, sci_device->sci_init_value[0], sci_device->sci_init_value[1]);
 #endif
-			spin_unlock_irqrestore(&ec_access_lock, flags);
 			break;
 		case	SCI_EVENT_NUM_AUDIO_VOLUME :
 			spin_lock_irqsave(&ec_access_lock, flags);
 #if 1
 			val = ec_read(REG_AUDIO_VOLUME);
+			spin_unlock_irqrestore(&ec_access_lock, flags);
 			if( (val == 0x00) || (val < sci_device->sci_init_value[1]) ){
 				sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_DEC] = 1;
 				sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_INC] = 0;
@@ -567,24 +602,34 @@ static int sci_parse_num(struct sci_device *sci_device)
 				sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_DEC] = 0;
 				sci_device->sci_init_value[1] = val;
 			}
-			//printk("volume_status 1 : 0x%02x\n", val);
 #endif
-			spin_unlock_irqrestore(&ec_access_lock, flags);
 			break;
 		case	SCI_EVENT_NUM_WLAN :
 			spin_lock_irqsave(&ec_access_lock, flags);
 			sci_device->sci_num_array[SCI_INDEX_WLAN] = ec_read(REG_WLAN_STATUS);
 			spin_unlock_irqrestore(&ec_access_lock, flags);
+			sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_DEC] = 0;
+			sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_INC] = 0;
+			sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_INC] = 0;
+			sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_DEC] = 0;
 			break;
 		case	SCI_EVENT_NUM_AUDIO_MUTE :
 			spin_lock_irqsave(&ec_access_lock, flags);
 			sci_device->sci_num_array[SCI_INDEX_AUDIO_MUTE] = ec_read(REG_AUDIO_MUTE);
 			spin_unlock_irqrestore(&ec_access_lock, flags);
+			sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_DEC] = 0;
+			sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_INC] = 0;
+			sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_INC] = 0;
+			sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_DEC] = 0;
 			break;
 		case	SCI_EVENT_NUM_BLACK_SCREEN :
 			spin_lock_irqsave(&ec_access_lock, flags);
 			sci_device->sci_num_array[SCI_INDEX_BLACK_SCREEN] = ec_read(REG_DISPLAY_LCD);
 			spin_unlock_irqrestore(&ec_access_lock, flags);
+			sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_DEC] = 0;
+			sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_INC] = 0;
+			sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_INC] = 0;
+			sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_DEC] = 0;
 			break;
 			
 		default :
@@ -654,7 +699,7 @@ static irqreturn_t sci_int_routine(int irq, void *dev_id)
 		printk("interrupitble\n");
 
 	}
-	
+
 	return IRQ_HANDLED;
 }
 
@@ -764,7 +809,7 @@ static int sci_low_level_init(struct sci_device *scidev)
 	ret = sci_query_event_num();
 	if(ret)
 		return ret;
-		
+
 	/* for filtering next number interrupt */
 	udelay(10000);
 
