@@ -29,11 +29,8 @@
 #include <linux/timer.h>
 #include <asm/delay.h>
 #include "ec.h"
-#include "ver.h"
-
 
 /************************************************************************/
-//extern struct proc_dir_entry proc_root;
 #ifndef	APM_32_BIT_SUPPORT
 #define	APM_32_BIT_SUPPORT	0x0002
 #endif
@@ -100,7 +97,8 @@ struct apm_pwr_info {
 	unsigned int bat_temperature;
 };
 
-extern spinlock_t	ec_access_lock;
+DEFINE_SPINLOCK(ec_access_lock);
+//extern spinlock_t	ec_access_lock;
 static struct task_struct *battery_tsk;
 
 static DEFINE_MUTEX(bat_info_lock);
@@ -161,18 +159,9 @@ static struct miscdevice apm_device = {
 };
 
 #ifdef	CONFIG_PROC_FS
-//static ssize_t bat_proc_read(struct file *file, char *buf, size_t len, loff_t *ppos);
 static int bat_proc_read(char *page, char **start, off_t off, int count, int *eof, void *data);
 static struct proc_dir_entry *bat_proc_entry;
-#if 0
-static struct file_operations bat_proc_fops = {
-	owner :	THIS_MODULE,
-	read  : bat_proc_read,
-	write : NULL,
-};
-#endif
 
-//static ssize_t bat_proc_read(struct file *file, char *buf, size_t len, loff_t *ppos)
 static int bat_proc_read(char *page, char **start, off_t off, int count, int *eof, void *data)
 {
 	struct apm_pwr_info info;
@@ -191,20 +180,12 @@ static int bat_proc_read(char *page, char **start, off_t off, int count, int *eo
 		info.bat_current	= bat_info.bat_current;
 	info.bat_temperature= bat_info.bat_temperature;
 
-	// this should be charged according to the capacity-time flow.
-#if 0
-	if(bat_info.curr_bat_cap < 22)
-		info.time = bat_info.curr_bat_cap * 3 / 2;
-	else
-		info.time = (bat_info.curr_bat_cap - 10) * 11 / 4;
-	info.units	    = APM_UNITS_MINS;
-#else
+	/* this should be charged according to the capacity-time flow. */
 	if(info.battery_status != APM_BATTERY_STATUS_NOT_PRESENT )
 		info.time = ((bat_info.curr_bat_cap - 3) * 54 + 142) / 60;
 	else
 		info.time = 0x00;
 	info.units	    = APM_UNITS_MINS;
-#endif
 
 	mutex_unlock(&bat_info_lock);
 	switch (info.units) {
@@ -213,7 +194,7 @@ static int bat_proc_read(char *page, char **start, off_t off, int count, int *eo
 	case 1: 	units = "sec";	break;
 	}
 
-	ret = sprintf(page/*buf*/, "%s 1.2 0x%02x 0x%02x 0x%02x 0x%02x %d%% %d %s %dmV %dmA %d\n",
+	ret = sprintf(page, "%s 1.2 0x%02x 0x%02x 0x%02x 0x%02x %d%% %d %s %dmV %dmA %d\n",
 		     driver_version, APM_32_BIT_SUPPORT,
 		     info.ac_line_status, info.battery_status,
 		     info.battery_flag, info.battery_life,
@@ -370,14 +351,12 @@ static int __init apm_init(void)
 
 #ifdef CONFIG_PROC_FS
 	bat_proc_entry = NULL;
-	//bat_proc_entry = create_proc_entry("apm", S_IWUSR | S_IRUGO, NULL);
 	bat_proc_entry = create_proc_entry("apm", S_IWUSR | S_IRUGO, NULL);
 	if(bat_proc_entry == NULL){
 		printk(KERN_ERR "EC BAT : register /proc/apm failed.\n");
 		return -EINVAL;
 	}
 	bat_proc_entry->owner = THIS_MODULE;
-	//bat_proc_entry->proc_fops = &bat_proc_fops;
 	bat_proc_entry->read_proc = bat_proc_read;
 	bat_proc_entry->write_proc = NULL;
 	bat_proc_entry->data = NULL;

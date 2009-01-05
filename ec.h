@@ -12,6 +12,8 @@
 #include	<asm/io.h>
 #include	<asm/system.h>
 
+#define VERSION		"1.30"
+
 /* 
  * The following registers are determined by the EC index configuration.
  * 1, fill the PORT_HIGH as EC register high part.
@@ -25,7 +27,8 @@
 /* ec registers range */
 #define	EC_MAX_REGADDR	0xFFFF
 #define	EC_MIN_REGADDR	0xF000
-#define	EC_RAM_ADDR	0xF400
+//#define	EC_RAM_ADDR	0xF400
+#define	EC_RAM_ADDR	0xF800
 
 /**********************************************************************/
 
@@ -182,10 +185,8 @@
 #define	SCI_INDEX_USB_OC2				0x06
 #define	SCI_INDEX_USB_OC0				0x07
 #define	SCI_INDEX_AC_BAT				0x08
-//#define	SCI_INDEX_DISPLAY_BRIGHTNESS	0x09
 #define	SCI_INDEX_DISPLAY_BRIGHTNESS_INC	0x09
 #define	SCI_INDEX_DISPLAY_BRIGHTNESS_DEC	0x0A
-//#define	SCI_INDEX_AUDIO_VOLUME			0x0B
 #define	SCI_INDEX_AUDIO_VOLUME_INC			0x0B
 #define	SCI_INDEX_AUDIO_VOLUME_DEC			0x0C
 #define	SCI_INDEX_WLAN					0x0D
@@ -194,15 +195,27 @@
 
 #define	SCI_MAX_EVENT_COUNT			0x10
 
-/* SCI Port */
-#define	SCI_DAT_PORT			0x62
-#define	SCI_CMD_PORT			0x66
-#define	SCI_CMD_GET_EVENT_NUM	0x84
+/* EC access port for sci communication */
+#define	EC_CMD_PORT		0x66
+#define	EC_STS_PORT		0x66
+#define	EC_DAT_PORT		0x62
+#define	CMD_INIT_IDLE_MODE	0xdd
+#define	CMD_EXIT_IDLE_MODE	0xdf
+#define	CMD_INIT_RESET_MODE	0xd8
+#define	CMD_REBOOT_SYSTEM	0x8c
+#define	CMD_GET_EVENT_NUM	0x84
 
 /**********************************************************************/
+//#define	DEBUG_PRINTK
+
+#ifdef DEBUG_PRINTK
+#define PRINTK_DBG(args...)	printk(args)
+#else
+#define PRINTK_DBG(args...)
+#endif
 
 /* read a 8bits ec register */
-static inline u8 ec_read(u16 addr)
+static inline unsigned char ec_read(unsigned short addr)
 {
 	outb( (addr & 0xff00) >> 8, EC_IO_PORT_HIGH );
 	outb( (addr & 0x00ff), EC_IO_PORT_LOW );
@@ -210,15 +223,19 @@ static inline u8 ec_read(u16 addr)
 }
 
 /* write a 8bits ec register with val */
-static inline void ec_write(u16 addr, u8 val)
+static inline void ec_write(unsigned short addr, unsigned char val)
 {
 	outb( (addr & 0xff00) >> 8, EC_IO_PORT_HIGH );
 	outb( (addr & 0x00ff), EC_IO_PORT_LOW );
 	outb( val, EC_IO_PORT_DATA );
+	inb( EC_IO_PORT_DATA );
 	return;
 }
 
 /********************************************************/
 
 extern void _rdmsr(u32 addr, u32 *hi, u32 *lo);
-extern void _wrmsr(u32 addr, u32 hi, u32 lo);     
+extern void _wrmsr(u32 addr, u32 hi, u32 lo);
+
+/****************************************************************/
+

@@ -38,17 +38,17 @@
 /***********************************************************************/
 
 extern spinlock_t ec_access_lock;
-extern void _rdmsr(u32 msr, u32 *hi, u32 *lo);
-extern void _wrmsr(u32 msr, u32 hi, u32 lo);
+extern int ec_query_seq(unsigned char cmd);
 
 /* inode information */
 #define	EC_SCI_MINOR_DEV	MISC_DYNAMIC_MINOR
-#define	EC_SCI_DEV		"sci"
-#define	SCI_IRQ_NUM		0x0A
+#define	EC_SCI_DEV			"sci"
+#define	SCI_IRQ_NUM			0x0A
 #define	CS5536_GPIO_SIZE	256
 
 /* ec delay time 500us for register and status access */
-#define	EC_REG_DELAY	300	//unit : us
+/* unit : us */
+#define	EC_REG_DELAY		300
 
 /***********************************************************************/
 struct ec_sci_reg{
@@ -58,22 +58,25 @@ struct ec_sci_reg{
 struct ec_sci_reg ecreg;
 
 struct sci_device {
-	unsigned char sci_number;	// the sci number get from ec
-	unsigned char sci_num_array[SCI_MAX_EVENT_COUNT];	// sci count
+	/* the sci number get from ec */
+	unsigned char sci_number;
 
-	// irq relative
+	/* sci count */
+	unsigned char sci_num_array[SCI_MAX_EVENT_COUNT];
+
+	/* irq relative */
 	unsigned char irq;
 	unsigned char irq_data;
 
-	// device name
+	/* device name */
 	unsigned char name[10];
 
-	// gpio base registers and length
+	/* gpio base registers and length */
 	unsigned long gpio_base;
 	unsigned long gpio_size;
 
-	// lock & wait_queue
-//	wait_queue_head_t wq;
+	/* lock & wait_queue */
+	wait_queue_head_t wq;
 	spinlock_t lock;
 	
 	/* storage initial value of sci status register 
@@ -88,7 +91,6 @@ struct sci_device *sci_device;
 static ssize_t sci_proc_read(struct file *file, char *buf, size_t len, loff_t *ppos);
 static ssize_t sci_proc_write(struct file *file, const char *buf, size_t len, loff_t *ppos);
 static unsigned int sci_poll(struct file *fp, poll_table *wait);
-static wait_queue_head_t sci_wq;
 static struct proc_dir_entry *sci_proc_entry;
 static struct file_operations sci_proc_fops = {
 	owner :	THIS_MODULE,
@@ -218,7 +220,8 @@ static void sci_machine_reset(void)
 }
 
 /*******************************************************************/
-static const char driver_version[] = "1.0";
+//static const char driver_version[] = "1.0";
+static const char driver_version[] = VERSION;
 
 #ifdef CONFIG_PROC_FS
 #define	PROC_BUF_SIZE	128
@@ -261,20 +264,20 @@ static ssize_t sci_proc_read(struct file *file, char *buf, size_t len, loff_t *p
 	int count = 0;
 	DECLARE_WAITQUEUE(wait, current);
 	
-	printk("0 irq_data %d\n", sci_device->irq_data);
+	PRINTK_DBG("0 irq_data %d\n", sci_device->irq_data);
 
 	if (sci_device->irq_data == 0) {
-		add_wait_queue(&sci_wq, &wait);
+		add_wait_queue(&(sci_device->wq), &wait);
 
 		while (!sci_device->irq_data) {
 			set_current_state(TASK_INTERRUPTIBLE);
 			schedule();
 		}
-		remove_wait_queue(&sci_wq, &wait);
+		remove_wait_queue(&(sci_device->wq), &wait);
 	}
 
 
-	printk("1 irq_data %d\n", sci_device->irq_data);
+	PRINTK_DBG("1 irq_data %d\n", sci_device->irq_data);
 	__set_current_state(TASK_RUNNING);
 
 	spin_lock_irqsave(&(sci_device->lock), flags);
@@ -284,12 +287,15 @@ static ssize_t sci_proc_read(struct file *file, char *buf, size_t len, loff_t *p
 	spin_unlock_irqrestore(&(sci_device->lock), flags);
 
 	ret = sprintf(proc_buf, 
-			"%s 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x\n", driver_version, 
-			event[SCI_INDEX_DISPLAY_BRIGHTNESS_INC], event[SCI_INDEX_DISPLAY_BRIGHTNESS_DEC], 
-			event[SCI_INDEX_AUDIO_VOLUME_INC], event[SCI_INDEX_AUDIO_VOLUME_DEC], 
-			event[SCI_INDEX_AUDIO_MUTE], event[SCI_INDEX_WLAN],
-			event[SCI_INDEX_LID], event[SCI_INDEX_DISPLAY_TOGGLE], 
-			event[SCI_INDEX_BLACK_SCREEN], event[SCI_INDEX_SLEEP], event[SCI_INDEX_OVERTEMP], 
+			"%s 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x "
+			"0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x "
+			"0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x\n", 
+			driver_version, event[SCI_INDEX_DISPLAY_BRIGHTNESS_INC], 
+			event[SCI_INDEX_DISPLAY_BRIGHTNESS_DEC], event[SCI_INDEX_AUDIO_VOLUME_INC], 
+			event[SCI_INDEX_AUDIO_VOLUME_DEC], event[SCI_INDEX_AUDIO_MUTE], 
+			event[SCI_INDEX_WLAN], event[SCI_INDEX_LID], 
+			event[SCI_INDEX_DISPLAY_TOGGLE], event[SCI_INDEX_BLACK_SCREEN], 
+			event[SCI_INDEX_SLEEP], event[SCI_INDEX_OVERTEMP], 
 			event[SCI_INDEX_CRT_DETECT], event[SCI_INDEX_CAMERA], 
 			event[SCI_INDEX_USB_OC2], event[SCI_INDEX_USB_OC0], 
 			(event[SCI_INDEX_AC_BAT] & 0x01) >> BIT_AC_BAT_BAT_IN, 
@@ -381,34 +387,17 @@ static ssize_t sci_proc_write(struct file *file, const char *buf, size_t len, lo
  */
 static int sci_query_event_num(void)
 {
-	int timeout = 100;
-	unsigned char status;
-	
-	udelay(EC_REG_DELAY);
-	outb(0x84, 0x66);
-	udelay(EC_REG_DELAY);
+	int ret = 0;
 
-	status = inb(0x66);
-	while(timeout--){
-		if(status & (1 << 1)){
-			status = inb(0x66);
-			udelay(EC_REG_DELAY);
-	//		printk("fixup sci : delay for accessing.\n");
-			continue;
-		}
-		break;
-	}
-	if(timeout <= 0){
-		printk("fixup sci : query event number timeout.\n");
-		return -EINVAL;
-	}
-
-	return 0;
+	ret = ec_query_seq(CMD_GET_EVENT_NUM);
+	return ret;
 }
 
 /*
  * sci_get_event_num :
  *	get sci event number from ec
+ *	NOTE : this routine must follow the sci_query_event_num 
+ *	function in the interrupt
  */
 static int sci_get_event_num(void)
 {
@@ -417,22 +406,21 @@ static int sci_get_event_num(void)
 	unsigned char status;
 	
 	udelay(EC_REG_DELAY);
-	status = inb(0x66);
+	status = inb(EC_STS_PORT);
 	udelay(EC_REG_DELAY);
 	while(timeout--){
 		if(!(status & (1 << 0))){
-			status = inb(0x66);
+			status = inb(EC_STS_PORT);
 			udelay(EC_REG_DELAY);
-	//		printk("fixup sci : delay for get event.\n");
 			continue;
 		}
 		break;
 	}
 	if(timeout <= 0){
-		printk("fixup sci : get event number timeout.\n");
+		PRINTK_DBG("fixup sci : get event number timeout.\n");
 		return -EINVAL;
 	}
-	value = inb(0x62);
+	value = inb(EC_DAT_PORT);
 	udelay(EC_REG_DELAY);
 
 	return value;
@@ -448,78 +436,67 @@ static int sci_parse_num(struct sci_device *sci_device)
 	unsigned long flags;
 	unsigned char val;
 
+	sci_device->sci_num_array[SCI_INDEX_DISPLAY_TOGGLE] = 0x0;
+	sci_device->sci_num_array[SCI_INDEX_SLEEP] = 0x0;
+	sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_DEC] = 0;
+	sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_INC] = 0;
+	sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_INC] = 0;
+	sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_DEC] = 0;
+
+	spin_lock_irqsave(&ec_access_lock, flags);
+	sci_device->sci_num_array[SCI_INDEX_WLAN] = ec_read(REG_WLAN_STATUS);
+	sci_device->sci_num_array[SCI_INDEX_AUDIO_MUTE] = ec_read(REG_AUDIO_MUTE);
+	sci_device->sci_num_array[SCI_INDEX_BLACK_SCREEN] = ec_read(REG_DISPLAY_LCD);
+	if( ec_read(REG_BAT_POWER) & BIT_BAT_POWER_ACIN ){
+		sci_device->sci_num_array[SCI_INDEX_AC_BAT] |= 1 << BIT_AC_BAT_AC_IN;
+	}else{
+		sci_device->sci_num_array[SCI_INDEX_AC_BAT] &= ~(1 << BIT_AC_BAT_AC_IN);
+	}
+	spin_unlock_irqrestore(&ec_access_lock, flags);
+
 	switch(sci_device->sci_number){
 		case	SCI_EVENT_NUM_LID :
 			spin_lock_irqsave(&ec_access_lock, flags);
 			sci_device->sci_num_array[SCI_INDEX_LID] = ec_read(REG_LID_DETECT);
 			spin_unlock_irqrestore(&ec_access_lock, flags);
-			sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_DEC] = 0;
-			sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_INC] = 0;
-			sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_INC] = 0;
-			sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_DEC] = 0;
 			break;
 		case	SCI_EVENT_NUM_DISPLAY_TOGGLE :
-			sci_device->sci_num_array[SCI_INDEX_DISPLAY_TOGGLE]^= 0x01;
-			sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_DEC] = 0;
-			sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_INC] = 0;
-			sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_INC] = 0;
-			sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_DEC] = 0;
+			spin_lock_irqsave(&ec_access_lock, flags);
+			sci_device->sci_num_array[SCI_INDEX_DISPLAY_TOGGLE] = 0x01;
+			spin_unlock_irqrestore(&ec_access_lock, flags);
 			break;
 		case	SCI_EVENT_NUM_SLEEP :
-			sci_device->sci_num_array[SCI_INDEX_SLEEP] ^= 0x01;
-			sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_DEC] = 0;
-			sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_INC] = 0;
-			sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_INC] = 0;
-			sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_DEC] = 0;
+			spin_lock_irqsave(&ec_access_lock, flags);
+			sci_device->sci_num_array[SCI_INDEX_SLEEP] = 0x01;
+			spin_unlock_irqrestore(&ec_access_lock, flags);
 			break;
 		case	SCI_EVENT_NUM_OVERTEMP :
 			spin_lock_irqsave(&ec_access_lock, flags);
 			sci_device->sci_num_array[SCI_INDEX_OVERTEMP] = (ec_read(REG_BAT_CHARGE_STATUS) & BIT_BAT_CHARGE_STATUS_OVERTEMP) >> 2;
 			spin_unlock_irqrestore(&ec_access_lock, flags);
-			sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_DEC] = 0;
-			sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_INC] = 0;
-			sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_INC] = 0;
-			sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_DEC] = 0;
 			break;
 		case	SCI_EVENT_NUM_CRT_DETECT :
 			spin_lock_irqsave(&ec_access_lock, flags);
 			sci_device->sci_num_array[SCI_INDEX_CRT_DETECT] = ec_read(REG_CRT_DETECT);
 			spin_unlock_irqrestore(&ec_access_lock, flags);
-			sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_DEC] = 0;
-			sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_INC] = 0;
-			sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_INC] = 0;
-			sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_DEC] = 0;
 			break;
 		case	SCI_EVENT_NUM_CAMERA :
 			spin_lock_irqsave(&ec_access_lock, flags);
 			sci_device->sci_num_array[SCI_INDEX_CAMERA] = ec_read(REG_CAMERA_STATUS);
 			spin_unlock_irqrestore(&ec_access_lock, flags);
-			sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_DEC] = 0;
-			sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_INC] = 0;
-			sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_INC] = 0;
-			sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_DEC] = 0;
 			break;
 		case	SCI_EVENT_NUM_USB_OC2 :
 			spin_lock_irqsave(&ec_access_lock, flags);
 			sci_device->sci_num_array[SCI_INDEX_USB_OC2] = ec_read(REG_USB2_FLAG);
 			spin_unlock_irqrestore(&ec_access_lock, flags);
-			sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_DEC] = 0;
-			sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_INC] = 0;
-			sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_INC] = 0;
-			sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_DEC] = 0;
 			break;
 		case	SCI_EVENT_NUM_USB_OC0 :
 			spin_lock_irqsave(&ec_access_lock, flags);
 			sci_device->sci_num_array[SCI_INDEX_USB_OC0] = ec_read(REG_USB0_FLAG);
 			spin_unlock_irqrestore(&ec_access_lock, flags);
-			sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_DEC] = 0;
-			sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_INC] = 0;
-			sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_INC] = 0;
-			sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_DEC] = 0;
 			break;
 		case	SCI_EVENT_NUM_AC_BAT :
 			spin_lock_irqsave(&ec_access_lock, flags);
-			
 			if( ec_read(REG_BAT_STATUS) & BIT_BAT_STATUS_IN ){
 				sci_device->sci_num_array[SCI_INDEX_AC_BAT] |= 1 << BIT_AC_BAT_BAT_IN;
 			}else{
@@ -558,82 +535,49 @@ static int sci_parse_num(struct sci_device *sci_device)
 				sci_device->sci_num_array[SCI_INDEX_AC_BAT] &= ~(1 << BIT_AC_BAT_BAT_FULL);
 			}
 			spin_unlock_irqrestore(&ec_access_lock,flags);
-
-			sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_DEC] = 0;
-			sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_INC] = 0;
-			sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_INC] = 0;
-			sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_DEC] = 0;
 			break;
 		case	SCI_EVENT_NUM_DISPLAY_BRIGHTNESS :
 			spin_lock_irqsave(&ec_access_lock, flags);
-#if 1
 			val = ec_read(REG_DISPLAY_BRIGHTNESS);
 			spin_unlock_irqrestore(&ec_access_lock, flags);
 			if( (val == 0x00) || (val < sci_device->sci_init_value[0]) ){
 				sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_DEC] = 1;
-				sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_INC] = 0;
-				sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_INC] = 0;
-				sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_DEC] = 0;
 				sci_device->sci_init_value[0] =  val;
 			}else if( (val == 0x08) || (val > sci_device->sci_init_value[0]) ){
 				sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_INC] = 1;
-				sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_DEC] = 0;
-				sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_INC] = 0;
-				sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_DEC] = 0;
 				sci_device->sci_init_value[0] =  val;
 			}
-#endif
 			break;
 		case	SCI_EVENT_NUM_AUDIO_VOLUME :
 			spin_lock_irqsave(&ec_access_lock, flags);
-#if 1
 			val = ec_read(REG_AUDIO_VOLUME);
 			spin_unlock_irqrestore(&ec_access_lock, flags);
 			if( (val == 0x00) || (val < sci_device->sci_init_value[1]) ){
 				sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_DEC] = 1;
-				sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_INC] = 0;
-				sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_INC] = 0;
-				sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_DEC] = 0;
 				sci_device->sci_init_value[1] =  val;
 			}else if( (val == 0x0a) || (val > sci_device->sci_init_value[1]) ){
 				sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_INC] = 1;
-				sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_DEC] = 0;
-				sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_INC] = 0;
-				sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_DEC] = 0;
 				sci_device->sci_init_value[1] = val;
 			}
-#endif
 			break;
 		case	SCI_EVENT_NUM_WLAN :
 			spin_lock_irqsave(&ec_access_lock, flags);
 			sci_device->sci_num_array[SCI_INDEX_WLAN] = ec_read(REG_WLAN_STATUS);
 			spin_unlock_irqrestore(&ec_access_lock, flags);
-			sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_DEC] = 0;
-			sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_INC] = 0;
-			sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_INC] = 0;
-			sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_DEC] = 0;
 			break;
 		case	SCI_EVENT_NUM_AUDIO_MUTE :
 			spin_lock_irqsave(&ec_access_lock, flags);
 			sci_device->sci_num_array[SCI_INDEX_AUDIO_MUTE] = ec_read(REG_AUDIO_MUTE);
 			spin_unlock_irqrestore(&ec_access_lock, flags);
-			sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_DEC] = 0;
-			sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_INC] = 0;
-			sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_INC] = 0;
-			sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_DEC] = 0;
 			break;
 		case	SCI_EVENT_NUM_BLACK_SCREEN :
 			spin_lock_irqsave(&ec_access_lock, flags);
 			sci_device->sci_num_array[SCI_INDEX_BLACK_SCREEN] = ec_read(REG_DISPLAY_LCD);
 			spin_unlock_irqrestore(&ec_access_lock, flags);
-			sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_DEC] = 0;
-			sci_device->sci_num_array[SCI_INDEX_DISPLAY_BRIGHTNESS_INC] = 0;
-			sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_INC] = 0;
-			sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_DEC] = 0;
 			break;
 			
 		default :
-			printk(KERN_ERR "EC SCI : not supported SCI NUMBER.\n");
+			PRINTK_DBG(KERN_ERR "EC SCI : not supported SCI NUMBER.\n");
 			return -EINVAL;
 			break;		
 	}
@@ -649,55 +593,43 @@ static int sci_parse_num(struct sci_device *sci_device)
  * so the interrupt routine should be longer than 120us
  * now at least 3ms elpase for it.
  */
-static int sci_count = 0;
 static irqreturn_t sci_int_routine(int irq, void *dev_id)
 {
 	int ret;
 	
 	if(sci_device->irq != irq){
-		printk(KERN_ERR "EC SCI :spurious irq.\n");
-		return -EINVAL;
+		PRINTK_DBG(KERN_ERR "EC SCI :spurious irq.\n");
+		return IRQ_NONE;
 	}
 
 	/* query the event number */
 	ret = sci_query_event_num();
 	if(ret < 0){
-		printk("ret 1: %d\n", ret);
-		return ret;
+		PRINTK_DBG("ret 1: %d\n", ret);
+		return IRQ_NONE;
 	}
 
 	ret = sci_get_event_num();
 	if(ret < 0){
-		printk("ret 2: %d\n", ret);
-		return ret;
+		PRINTK_DBG("ret 2: %d\n", ret);
+		return IRQ_NONE;
 	}
 	sci_device->sci_number = ret;
 	
-	printk(KERN_INFO "(%d)sci_number :0x%x\n", sci_count++, sci_device->sci_number);
+	PRINTK_DBG(KERN_INFO "sci_number :0x%x\n", sci_device->sci_number);
 
 	/* parse the event number and wake the queue */
 	if( (sci_device->sci_number != 0x00) 
 		&& (sci_device->sci_number != 0xff) ){
 		ret = sci_parse_num(sci_device);
-		printk("ret 3: %d\n", ret);
+		PRINTK_DBG("ret 3: %d\n", ret);
 		if(!ret)
 			sci_device->irq_data = 1;
 		else
 			sci_device->irq_data = 0;			
-//		wake_queue_active(&sci_wq);
-#if 0
-		{
-			wait_queue_t *wt;
-			struct list_head *tmp;
-			list_for_each(tmp, &sci_wq.task_list) {
-				wt = list_entry(tmp, wait_queue_t, task_list);
-				printk("interrupt task %p\n", wt->private);
-			}
-		}
-#endif
-		wake_up_interruptible(&sci_wq);
-		printk("interrupitble\n");
 
+		wake_up_interruptible(&(sci_device->wq));
+		PRINTK_DBG("interrupitble\n");
 	}
 
 	return IRQ_HANDLED;
@@ -725,7 +657,7 @@ static unsigned int sci_poll(struct file *fp, poll_table *wait)
 	int mask = 0;
 
 	//printk("current task %p\n", current);
-	poll_wait(fp, &sci_wq, wait);
+	poll_wait(fp, &(sci_device->wq), wait);
 	if(sci_device->irq_data){
 		//printk("current task 1 %p\n", current);
 		mask = POLLIN | POLLRDNORM;
@@ -804,11 +736,14 @@ static int sci_low_level_init(struct sci_device *scidev)
 	u32 hi, lo;
 	u32 gpio_base = scidev->gpio_base;
 	int ret = 0;
+	unsigned long flags;
 
 	/* filter the former kb3310 interrupt for security */
 	ret = sci_query_event_num();
-	if(ret)
+	if(ret){
+		PRINTK_DBG(KERN_ERR "sci low level init query event num failed.\n");
 		return ret;
+	}
 
 	/* for filtering next number interrupt */
 	udelay(10000);
@@ -822,6 +757,7 @@ static int sci_low_level_init(struct sci_device *scidev)
 	 *	no primary and lpc
 	 *	Unrestricted Z input to IG10 from Virtual gpio 0.
 	 */
+	local_irq_save(flags);
 	_rdmsr(0x80000024, &hi, &lo);
 	lo &= ~(1 << 10);
 	_wrmsr(0x80000024, hi, lo);
@@ -831,6 +767,7 @@ static int sci_low_level_init(struct sci_device *scidev)
 	_rdmsr(0x80000023, &hi, &lo);
 	lo |= (0x0a << 0);
 	_wrmsr(0x80000023, hi, lo);
+	local_irq_restore(flags);
 	
 	/* set gpio27 as sci interrupt : 
 	 * input, pull-up, no-fliter, no-negedge, invert
@@ -862,10 +799,10 @@ static int __devinit sci_pci_init(struct pci_dev *pdev, const struct pci_device_
 	/* init the sci device */
 	sci_device = kmalloc(sizeof(struct sci_device), GFP_KERNEL);
 	if(sci_device == NULL){
-		printk(KERN_ERR "EC SCI : get memory for sci_device failed.\n");
+		PRINTK_DBG(KERN_ERR "EC SCI : get memory for sci_device failed.\n");
 		return -ENOMEM;
 	}
-	init_waitqueue_head(&sci_wq);
+	init_waitqueue_head(&(sci_device->wq));
 	spin_lock_init(&sci_device->lock);
 	sci_device->irq	= SCI_IRQ_NUM;
 	sci_device->irq_data = 0x00;
@@ -876,7 +813,6 @@ static int __devinit sci_pci_init(struct pci_dev *pdev, const struct pci_device_
 	spin_lock_irqsave(&ec_access_lock, flags);
 	sci_device->sci_init_value[0] = ec_read(REG_DISPLAY_BRIGHTNESS);
 	sci_device->sci_init_value[1] = ec_read(REG_AUDIO_VOLUME);
-	//printk("backlight_status 0 : 0x%02x, volume_status 0 : 0x%02x\n", sci_device->sci_init_value[0], sci_device->sci_init_value[1]);
 	spin_unlock_irqrestore(&ec_access_lock, flags);
 #endif
 
@@ -886,7 +822,7 @@ static int __devinit sci_pci_init(struct pci_dev *pdev, const struct pci_device_
 	/* enable pci device and get the GPIO resources */
 	ret = pci_enable_device(pdev);
 	if(ret){
-		printk(KERN_ERR "EC SCI : enable pci device failed.\n");
+		PRINTK_DBG(KERN_ERR "EC SCI : enable pci device failed.\n");
 		ret = -ENODEV;
 		goto out_pdev;
 	}
@@ -895,12 +831,12 @@ static int __devinit sci_pci_init(struct pci_dev *pdev, const struct pci_device_
 	gpio_base = pci_resource_start(pdev, 1);
 	gpio_base &= ~0x0003;
 	if(gpio_base == 0x0000){
-		printk(KERN_ERR "EC SCI : get resource failed.\n");
+		PRINTK_DBG(KERN_ERR "EC SCI : get resource failed.\n");
 		ret = -ENODEV;
 		goto out_resource;
 	}
 	if(request_region(gpio_base, CS5536_GPIO_SIZE, EC_SCI_DEV) == NULL){
-		printk(KERN_ERR "EC SCI : base 0x%x, length 0x%x already in use.\n", gpio_base, CS5536_GPIO_SIZE);
+		PRINTK_DBG(KERN_ERR "EC SCI : base 0x%x, length 0x%x already in use.\n", gpio_base, CS5536_GPIO_SIZE);
 		goto out_resource;
 	}
 	sci_device->gpio_base = gpio_base;
@@ -930,6 +866,7 @@ static int __devinit sci_pci_init(struct pci_dev *pdev, const struct pci_device_
 	}
 	
 	ret = 0;
+	printk(KERN_INFO "sci probe ok...\n");
 	goto out;
 	
 out_misc :
@@ -978,13 +915,6 @@ static int __init sci_init(void)
 	}
 	sci_proc_entry->owner = THIS_MODULE;
 	sci_proc_entry->proc_fops = &sci_proc_fops;
-#if 0 //daway 08-12-11
-	sci_proc_entry->read_proc  = sci_proc_read;
-	//sci_proc_entry->write_proc = NULL;
-	sci_proc_entry->write_proc = sci_proc_write;
-	//sci_proc_entry->write_proc = NULL;
-	sci_proc_entry->data = NULL;
-#endif
 #endif
 
 	ret = pci_register_driver(&sci_driver);

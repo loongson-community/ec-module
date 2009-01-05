@@ -7,6 +7,29 @@
  * 		1, The application layer for reading, writing ec registers and code 
  * 		program are supported.
  */
+
+/***********************************************************/
+/* ec delay time 500us for register and status access */
+#define	EC_REG_DELAY	500	//unit : us
+/* ec rom flash id size and array : Manufacture ID[1], Device ID[2] */
+#define	EC_ROM_ID_SIZE	3
+
+/* version burned address */
+#define	VER_ADDR	0xf7a1
+#define	VER_MAX_SIZE	7
+#define	EC_ROM_MAX_SIZE	0x10000
+
+/* ec internal register */
+#define	REG_POWER_MODE		0xF710
+#define	FLAG_NORMAL_MODE	0x00
+#define	FLAG_IDLE_MODE		0x01
+#define	FLAG_RESET_MODE		0x02
+
+/* ec update program flag */
+#define	PROGRAM_FLAG_NONE	0x00
+#define	PROGRAM_FLAG_IE		0x01
+#define	PROGRAM_FLAG_ROM	0x02
+
 /* XBI relative registers */
 #define REG_XBISEG0     0xFEA0
 #define REG_XBISEG1     0xFEA1
@@ -53,7 +76,46 @@
 #define	SPICFG_EN_OFFSET_READ	0x40
 #define	SPICFG_EN_FAST_READ		0x80
 
+/* SMBUS relative register block according to the EC datasheet. */
+#define	REG_SMBTCRC				0xff92
+#define	REG_SMBPIN				0xff93
+#define	REG_SMBCFG				0xff94
+#define	REG_SMBEN				0xff95
+#define	REG_SMBPF				0xff96
+#define	REG_SMBRCRC				0xff97
+#define	REG_SMBPRTCL			0xff98
+#define	REG_SMBSTS				0xff99
+#define	REG_SMBADR				0xff9a
+#define	REG_SMBCMD				0xff9b
+#define	REG_SMBDAT_START		0xff9c
+#define	REG_SMBDAT_END			0xffa3
+#define	SMBDAT_SIZE				8
+#define	REG_SMBRSA				0xffa4
+#define	REG_SMBCNT				0xffbc
+#define	REG_SMBAADR				0xffbd
+#define	REG_SMBADAT0			0xffbe
+#define	REG_SMBADAT1			0xffbf
 
+/* watchdog timer registers */
+#define	REG_WDTCFG				0xfe80
+#define	REG_WDTPF				0xfe81
+
+/* lpc configure register */
+#define	REG_LPCCFG				0xfe95
+
+/* 8051 reg */
+#define	REG_PXCFG				0xff14
+
+/* Fan register in KB3310 */
+#define	REG_ECFAN_SPEED_LEVEL	0xf4e4
+#define	REG_ECFAN_SWITCH		0xf4d2
+
+/*************************************************************/
+/* the ec flash rom id number */
+#define	EC_ROM_PRODUCT_ID_SPANSION	0x01
+#define	EC_ROM_PRODUCT_ID_MXIC		0xC2
+#define	EC_ROM_PRODUCT_ID_AMIC		0x37
+#define	EC_ROM_PRODUCT_ID_EONIC		0x1C
 
 /**************************************************************/
 
@@ -65,8 +127,8 @@
 
 #define	EC_IOC_MAGIC		'E'
 /* misc ioctl operations */
-#define	IOCTL_RDREG			_IOR(EC_IOC_MAGIC, 1, int)
-#define	IOCTL_WRREG			_IOW(EC_IOC_MAGIC, 2, int)
+#define	IOCTL_RDREG		_IOR(EC_IOC_MAGIC, 1, int)
+#define	IOCTL_WRREG		_IOW(EC_IOC_MAGIC, 2, int)
 #define	IOCTL_READ_EC		_IOR(EC_IOC_MAGIC, 3, int)
 #define	IOCTL_PROGRAM_IE	_IOW(EC_IOC_MAGIC, 4, int)
 #define	IOCTL_PROGRAM_EC	_IOW(EC_IOC_MAGIC, 5, int)
@@ -83,7 +145,7 @@
 #define	EC_FLASH_TIMEOUT	0x1000	// ec program timeout
 
 /* EC content max size */
-#define	EC_CONTENT_MAX_SIZE	(61 * 1024)
+#define	EC_CONTENT_MAX_SIZE	(64 * 1024)
 #define	IE_CONTENT_MAX_SIZE	(0x100000 - IE_START_ADDR)
 /* the register operation access struct */
 struct ec_reg {

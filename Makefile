@@ -1,31 +1,18 @@
 #KERNEL_VERSION	:= `uname -r`
-#KERNEL_DIR	:= /lib/modules/$(KERNEL_VERSION)/build
-#KERNEL_DIR	:= /home/users/jlliu/git-linux-kernel
-#KERNEL_DIR	:= /home/huangw/MyWorks/git_works/linux-2.6.27-89inch
-#KERNEL_DIR	:= /home/huangw/MyWorks/git-works/linux_loongson
 KERNEL_DIR	:= /home/yh/linux-2.6.27.1-lemote
-#ERNEL_DIR	:= /home/huangw/MyWorks/git-works/linux-2.6.27.1-lemote
-#KERNEL_DIR	:= /home/huangw/MyWorks/svn-works/kernel-8.9inch 
-#KERNEL_DIR	:= /home/yh/Work/linux-2.6-lemote-64
 INSTALL_MOD_DIR	:= char/
 
 PWD		:= $(shell pwd)
 CROSS_COMPILE	:= mipsel-linux-
 
-#obj-m		:= ec_batd.o ec_miscd.o ec_ftd.o
-#obj-m		:= ec_scid.o
-#obj-m		:= pmon_flash.o
-obj-m		:= ec_scid.o ec_batd.o ec_miscd.o ec_ftd.o pmon_flash.o
+obj-m			:= ec_batd.o ec_miscd.o ec_ftd.o ec_scid.o pmon_flash.o
 ec_batd-objs	:= ec_bat.o 
-ec_ftd-objs	:= ec_ft.o
+ec_ftd-objs		:= ec_ft.o
 ec_miscd-objs	:= ec_misc.o
-pmon_flash-objs = pmon.o
 ec_scid-objs	:= ec_sci.o
+pmon_flash-objs	:= pmon.o
 
-#all: ec_batd ec_ftd ec_miscd
-#all: ec_scid
-#all: pmon_flash
-all: ec_scid ec_batd ec_ftd ec_miscd pmon_flash
+all: ec_batd ec_ftd ec_miscd ec_scid pmon_flash
 
 ec_batd:
 	@echo "Building Embedded Controller KB3310 driver..."
