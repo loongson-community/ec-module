@@ -118,7 +118,7 @@ static int ft_manager(void *arg)
 	unsigned long flags;
 	u8 val, reg_val;
 
-	printk(KERN_DEBUG "Fan & Temperature Management thread started.\n");
+	PRINTK_DBG(KERN_DEBUG "Fan & Temperature Management thread started.\n");
 	while(1){
 		set_current_state(TASK_INTERRUPTIBLE);
 		/* schedule every 1s */
@@ -150,7 +150,7 @@ static int ft_manager(void *arg)
 		mutex_unlock(&ft_info_lock);
 	}
 	
-	printk(KERN_DEBUG "Fan and Temperature Management thread exit.\n");
+	PRINTK_DBG(KERN_DEBUG "Fan and Temperature Management thread exit.\n");
 
 	return 0;
 

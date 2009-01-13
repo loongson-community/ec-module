@@ -97,8 +97,8 @@ struct apm_pwr_info {
 	unsigned int bat_temperature;
 };
 
-DEFINE_SPINLOCK(ec_access_lock);
-//extern spinlock_t	ec_access_lock;
+//DEFINE_SPINLOCK(ec_access_lock);
+extern spinlock_t	ec_access_lock;
 static struct task_struct *battery_tsk;
 
 static DEFINE_MUTEX(bat_info_lock);
@@ -261,7 +261,7 @@ static int battery_manager(void *arg)
 		printk(KERN_INFO "battery vendor(%s), cells count(%d), with designed capacity(%d),designed voltage(%d), full charged capacity(%d)\n", (bat_info.bat_vendor == FLAG_BAT_VENDOR_SANYO)?"SANYO":"SIMPLO", (bat_info.bat_cell_count == FLAG_BAT_CELL_3S1P) ? 3 : 6, bat_info.bat_design_cap, bat_info.bat_design_vol, bat_info.bat_full_charged_cap);
 	}
 
-	printk(KERN_DEBUG "Battery manager thread started.\n");
+	PRINTK_DBG(KERN_DEBUG "Battery manager thread started.\n");
 	while(1){
 		set_current_state(TASK_INTERRUPTIBLE);
 		/* schedule every 1s, it is better for changed to 1s. */
@@ -328,7 +328,7 @@ static int battery_manager(void *arg)
 		mutex_unlock(&bat_info_lock);
 	}
 	
-	printk(KERN_DEBUG "Battery Management thread exit.\n");
+	PRINTK_DBG(KERN_DEBUG "Battery Management thread exit.\n");
 	return 0;
 }
 

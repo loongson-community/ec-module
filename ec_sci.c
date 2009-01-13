@@ -344,31 +344,31 @@ static ssize_t sci_proc_write(struct file *file, const char *buf, size_t len, lo
 	switch(sci_cmd){
 		case	CMD_DISPLAY_LCD :
 			sci_display_lcd();
-			printk(KERN_DEBUG "CMD_DISPLAY_LCD");
+			PRINTK_DBG(KERN_DEBUG "CMD_DISPLAY_LCD");
 			break;
 		case	CMD_DISPLAY_CRT :
 			sci_display_crt();
-			printk(KERN_DEBUG "CMD_DISPLAY_CRT");
+			PRINTK_DBG(KERN_DEBUG "CMD_DISPLAY_CRT");
 			break;
 		case	CMD_DISPLAY_ALL :
 			sci_display_all();
-			printk(KERN_DEBUG "CMD_DISPLAY_ALL");
+			PRINTK_DBG(KERN_DEBUG "CMD_DISPLAY_ALL");
 			break;
 		case	CMD_DISPLAY_CHANGE_BRIGHTNESS :
 			sci_display_change_brightness();
-			printk(KERN_DEBUG "CMD_DISPLAY_CHANGE_BRIGHTNESS");
+			PRINTK_DBG(KERN_DEBUG "CMD_DISPLAY_CHANGE_BRIGHTNESS");
 			break;
 		case	CMD_AUDIO_CHANGE_VOLUME :
 			sci_audio_change_volume();
-			printk(KERN_DEBUG "CMD_AUDIO_CHANGE_VOLUME");
+			PRINTK_DBG(KERN_DEBUG "CMD_AUDIO_CHANGE_VOLUME");
 			break;
 		case	CMD_MACHINE_OFF :
 			sci_machine_off();
-			printk(KERN_DEBUG "CMD_MACHINE_OFF");
+			PRINTK_DBG(KERN_DEBUG "CMD_MACHINE_OFF");
 			break;
 		case	CMD_MACHINE_RESET :
 			sci_machine_reset();
-			printk(KERN_DEBUG "CMD_MACHINE_RESET");
+			PRINTK_DBG(KERN_DEBUG "CMD_MACHINE_RESET");
 			break;
 		default :
 			printk(KERN_ERR "EC SCI : Not supported cmd.\n");
@@ -639,13 +639,13 @@ static irqreturn_t sci_int_routine(int irq, void *dev_id)
 
 static int sci_open(struct inode * inode, struct file * filp)
 {
-	printk(KERN_INFO "SCI : open ok.\n");
+	PRINTK_DBG(KERN_INFO "SCI : open ok.\n");
 	return 0;
 }
 
 static int sci_release(struct inode * inode, struct file * filp)
 {
-	printk(KERN_INFO "SCI : close ok.\n");
+	PRINTK_DBG(KERN_INFO "SCI : close ok.\n");
 	return 0;
 }
 
@@ -696,7 +696,7 @@ static int sci_ioctl(struct inode *inode, struct file *filp, unsigned long cmd, 
 	return 0;
 }
 
-static int sci_compat_ioctl(struct file *file, unsigned long cmd, unsigned long arg)
+static long sci_compat_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	return sci_ioctl(file->f_dentry->d_inode, file, cmd, arg);
 }
@@ -866,7 +866,7 @@ static int __devinit sci_pci_init(struct pci_dev *pdev, const struct pci_device_
 	}
 	
 	ret = 0;
-	printk(KERN_INFO "sci probe ok...\n");
+	PRINTK_DBG(KERN_INFO "sci probe ok...\n");
 	goto out;
 	
 out_misc :

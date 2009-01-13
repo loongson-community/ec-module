@@ -12,7 +12,7 @@
 #include	<asm/io.h>
 #include	<asm/system.h>
 
-#define VERSION		"1.30"
+#define VERSION		"1.31"
 
 /* 
  * The following registers are determined by the EC index configuration.

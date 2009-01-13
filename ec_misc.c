@@ -454,6 +454,9 @@ static int ec_program_rom(struct ec_info *info, int flag)
 		i++;
 		addr++;
 	}
+
+	/* for security */
+	udelay(100000);
 	/* exit from the reset mode */
 	ec_exit_reset_mode();
 	
@@ -502,7 +505,6 @@ static int misc_ioctl(struct inode * inode, struct file *filp, u_int cmd, u_long
 				printk(KERN_ERR "spi read : copy from user error.\n");
 				return -EFAULT;
 			}
-			//printk(KERN_INFO "ecreg->addr : 0x%x, EC_RAM_ADDR : 0x%x\n", ecreg->addr, EC_RAM_ADDR);
 			if( (ecreg->addr > EC_RAM_ADDR) && (ecreg->addr < EC_MAX_REGADDR) ){
 				printk(KERN_ERR "spi read : out of register address range.\n");
 				return -EINVAL;
@@ -587,7 +589,7 @@ static int misc_ioctl(struct inode * inode, struct file *filp, u_int cmd, u_long
 	return 0;
 }
 
-static int misc_compat_ioctl(struct file *file, unsigned long cmd, unsigned long arg)
+static long misc_compat_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
 	return misc_ioctl(file->f_dentry->d_inode, file, cmd, arg);
 }
