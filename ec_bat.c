@@ -97,8 +97,8 @@ struct apm_pwr_info {
 	unsigned int bat_temperature;
 };
 
-//DEFINE_SPINLOCK(ec_access_lock);
-extern spinlock_t	ec_access_lock;
+DEFINE_SPINLOCK(ec_access_lock);
+//extern spinlock_t	ec_access_lock;
 static struct task_struct *battery_tsk;
 
 static DEFINE_MUTEX(bat_info_lock);

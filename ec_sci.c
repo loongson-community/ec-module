@@ -37,6 +37,7 @@
 
 /***********************************************************************/
 
+//DEFINE_SPINLOCK(ec_access_lock);
 extern spinlock_t ec_access_lock;
 extern int ec_query_seq(unsigned char cmd);
 
