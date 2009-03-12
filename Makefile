@@ -5,31 +5,31 @@ INSTALL_MOD_DIR	:= char/
 PWD		:= $(shell pwd)
 CROSS_COMPILE	:= mipsel-linux-
 
-obj-m			:= ec_batd.o ec_miscd.o ec_ftd.o ec_scid.o rdecd.o pmon_flash.o
+obj-m			:= ec_miscd.o ec_batd.o ec_ftd.o ec_scid.o io_msr_debug.o pmon_flash.o
 
+ec_miscd-objs	:= ec_misc.o
 ec_batd-objs	:= ec_bat.o 
 ec_ftd-objs		:= ec_ft.o
-ec_miscd-objs	:= ec_misc.o
 ec_scid-objs	:= ec_sci.o
-rdecd-objs		:= rdec.o
+#io_msr_debug-objs	:= io_msr_debug.o
 pmon_flash-objs	:= pmon.o
 
-all: ec_batd ec_ftd ec_miscd ec_scid rdecd pmon_flash
+all: ec_miscd ec_batd ec_ftd ec_scid io_msr_debug pmon_flash
 
-ec_batd:
+ec_miscd:
 	@echo "Building Embedded Controller KB3310 driver..."
 	@(cd $(KERNEL_DIR) && make -C $(KERNEL_DIR) SUBDIRS=$(PWD) CROSS_COMPILE=$(CROSS_COMPILE) modules)
 
-rdecd:
+ec_batd:
 	@(cd $(KERNEL_DIR) && make -C $(KERNEL_DIR) SUBDIRS=$(PWD) CROSS_COMPILE=$(CROSS_COMPILE) modules)
 
 ec_ftd:
 	@(cd $(KERNEL_DIR) && make -C $(KERNEL_DIR) SUBDIRS=$(PWD) CROSS_COMPILE=$(CROSS_COMPILE) modules)
 
-ec_miscd:
+ec_scid:
 	@(cd $(KERNEL_DIR) && make -C $(KERNEL_DIR) SUBDIRS=$(PWD) CROSS_COMPILE=$(CROSS_COMPILE) modules)
 
-ec_scid:
+io_msr_debug:
 	@(cd $(KERNEL_DIR) && make -C $(KERNEL_DIR) SUBDIRS=$(PWD) CROSS_COMPILE=$(CROSS_COMPILE) modules)
 
 pmon_flash:
