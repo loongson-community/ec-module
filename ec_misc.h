@@ -11,8 +11,6 @@
 /***********************************************************/
 /* ec delay time 500us for register and status access */
 #define	EC_REG_DELAY	500	//unit : us
-/* ec rom flash id size and array : Manufacture ID[1], Device ID[2] */
-#define	EC_ROM_ID_SIZE	3
 
 /* version burned address */
 #define	VER_ADDR	0xf7a1
@@ -147,6 +145,31 @@
 /* EC content max size */
 #define	EC_CONTENT_MAX_SIZE	(64 * 1024)
 #define	IE_CONTENT_MAX_SIZE	(0x100000 - IE_START_ADDR)
+
+/*
+ * piece structure :
+ *	------------------------------
+ *	| 1byte | 3 bytes | 28 bytes |
+ *	| flag  | addr	  | data	 |
+ *	------------------------------
+ *	flag : 
+ *		bit0 : '1' for first piece, '0' for other
+ *	addr :
+ *		address for EC to burn the data to(rom address)
+ *	data :
+ *		data which we should burn to the ec rom
+ *
+ * NOTE : so far max size should be 256bytes, or we should change the address-1 value.
+ * 		piece is used for IE program
+ */
+#define	PIECE_SIZE		(32 - 1 - 3)
+#define	FIRST_PIECE_YES	1
+#define	FIRST_PIECE_NO	0
+#define	PIECE_STATUS_REG	0xF77C			// piece program status reg from ec firmware
+#define	PIECE_STATUS_PROGRAM_DONE	0x80	// piece program status reg done flag
+#define	PIECE_STATUS_PROGRAM_ERROR	0x40	// piece program status reg error flag
+#define	PIECE_START_ADDR	0xF800			// 32bytes should be stored here
+
 /* the register operation access struct */
 struct ec_reg {
 	u32 addr;	/* the address of kb3310 registers */

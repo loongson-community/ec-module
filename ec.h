@@ -12,7 +12,7 @@
 #include	<asm/io.h>
 #include	<asm/system.h>
 
-#define VERSION		"1.32"
+#define VERSION		"1.33"
 
 /* 
  * The following registers are determined by the EC index configuration.
@@ -204,6 +204,7 @@
 #define	CMD_INIT_RESET_MODE	0xd8
 #define	CMD_REBOOT_SYSTEM	0x8c
 #define	CMD_GET_EVENT_NUM	0x84
+#define	CMD_PROGRAM_PIECE	0xda
 
 /**********************************************************************/
 //#define	DEBUG_PRINTK

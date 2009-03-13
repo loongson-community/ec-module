@@ -35,8 +35,12 @@
 
 /*******************************************************************/
 /* read ec rom id from flash chip */
+#define	NO_ROM_ID_NEEDED	// we need no rom id for read operation
+#ifndef	NO_ROM_ID_NEEDED
 #define	EC_ROM_ID_SIZE	3
 unsigned char  ec_rom_id[EC_ROM_ID_SIZE];
+#endif
+
 struct ec_info	ecinfo;
 
 
@@ -248,6 +252,7 @@ static int ec_read_byte(unsigned int addr, unsigned char *byte)
 	ec_write(REG_XBISPIA1, (addr & 0x00ff00) >> 8);
 	ec_write(REG_XBISPIA0, (addr & 0x0000ff) >> 0);
 	/* start action */
+#ifndef	NO_ROM_ID_NEEDED
 	switch(ec_rom_id[0]){
 		case EC_ROM_PRODUCT_ID_SPANSION :
 			ec_write(REG_XBISPICMD, SPICMD_READ_BYTE);
@@ -267,6 +272,9 @@ static int ec_read_byte(unsigned int addr, unsigned char *byte)
 			ec_write(REG_XBISPICMD, SPICMD_READ_BYTE);
 			break;
 	}
+#else
+	ec_write(REG_XBISPICMD, SPICMD_HIGH_SPEED_READ);
+#endif
 	timeout = EC_FLASH_TIMEOUT;
 	while(timeout-- >= 0){
 		if( !(ec_read(REG_XBISPICFG) & SPICFG_SPI_BUSY) )
@@ -405,7 +413,74 @@ static int ec_unit_erase(unsigned char erase_cmd, unsigned int addr)
 	return 0;
 }
 
-static int ec_program_rom(struct ec_info *info, int flag)
+static int ec_program_piece(struct ec_info *info)
+{
+	unsigned int addr = info->start_addr + IE_START_ADDR;
+	unsigned long size = info->size;
+	unsigned int pieces;
+	unsigned char *ptr;
+	unsigned long timeout;
+	int i, j;
+	// int k;
+	unsigned char status;
+	int ret = 0;
+
+	/* calculate the number of pieces and set the rest buffer with 0xff by default */
+	ptr = info->buf;
+	pieces = size / PIECE_SIZE;	
+
+//	printk("pieces : %d\n", pieces);
+retry :
+	for(i = 0; i < pieces; i++){
+	
+		/* check status for chip ready */
+		timeout = EC_FLASH_TIMEOUT;
+		while(timeout-- > 0){
+			status = ec_read(PIECE_STATUS_REG);
+			if( (status & PIECE_STATUS_PROGRAM_DONE) == 1 ){
+				if( (status & PIECE_STATUS_PROGRAM_ERROR) == 0 ){
+					break;
+				}else{
+					goto retry;
+				}
+			}		
+			udelay(EC_REG_DELAY);
+		}
+		if(timeout <= 0){
+			printk(KERN_ERR "timeout for check piece status.\n");
+			return -EINVAL;
+		}
+		
+		/* program piece action */
+		if( (addr == IE_START_ADDR) && (i == 0) ){
+			ec_write(PIECE_START_ADDR, FIRST_PIECE_YES);
+		}else{
+			ec_write(PIECE_START_ADDR, FIRST_PIECE_NO);
+		}
+		ec_write(PIECE_START_ADDR + 1, (addr & 0xff) + i * PIECE_SIZE);
+		ec_write(PIECE_START_ADDR + 2, (addr & 0xff00) >> 8);
+		ec_write(PIECE_START_ADDR + 3, (addr & 0xff0000) >> 16);
+		for(j = 0; j < PIECE_SIZE; j++){
+			ec_write(PIECE_START_ADDR + j + 4, ptr[j + i * PIECE_SIZE]);
+		}
+
+	//	for(k = 0; k < PIECE_SIZE + 4; k++){
+	//		printk("internal %d, value 0x%x\n", k, ec_read(PIECE_START_ADDR + k));
+	//	}
+
+		/* make chip goto program bytes */
+		ret = ec_query_seq(CMD_PROGRAM_PIECE);
+		if(ret < 0){
+			printk(KERN_ERR "ec issue program byte failed.\n");
+			return ret;
+		}
+
+	}
+
+	return 0;	
+}
+
+static int ec_program_rom(struct ec_info *info)
 {
 	unsigned int addr = 0;
 	unsigned long size = 0;
@@ -422,13 +497,8 @@ static int ec_program_rom(struct ec_info *info, int flag)
 
 	size = info->size;
 	ptr  = info->buf;
-    if(flag == PROGRAM_FLAG_IE){
-		addr = info->start_addr + IE_START_ADDR;
-        PRINTK_DBG(KERN_INFO "starting programming ec IE..........\n");
-	}else if(flag == PROGRAM_FLAG_ROM){
-		addr = info->start_addr + EC_START_ADDR;
-        PRINTK_DBG(KERN_INFO "starting update ec ROM..............\n");
-	}
+	addr = info->start_addr + EC_START_ADDR;
+    PRINTK_DBG(KERN_INFO "starting update ec ROM..............\n");
 
 	ret = ec_unit_erase(SPICMD_BLK_ERASE, addr);
 	if(ret){
@@ -459,7 +529,7 @@ static int ec_program_rom(struct ec_info *info, int flag)
 	udelay(100000);
 	/* exit from the reset mode */
 	ec_exit_reset_mode();
-	
+
 	return 0;
 }
 
@@ -468,6 +538,8 @@ static int misc_ioctl(struct inode * inode, struct file *filp, u_int cmd, u_long
 	void __user *ptr = (void __user *)arg;
 	struct ec_reg *ecreg = (struct ec_reg *)(filp->private_data);
 	int ret = 0;
+	int i;
+	u32 temp_size = 0;
 
 	switch (cmd) {
 		case IOCTL_RDREG :
@@ -530,11 +602,16 @@ static int misc_ioctl(struct inode * inode, struct file *filp, u_int cmd, u_long
 				printk(KERN_ERR "program ie : size out of limited.\n");
 				return -EINVAL;
 			}
-			if(ecinfo.size > 0x10000){
-				printk(KERN_ERR "program ie : size is out of 64KB, too big...\n");
+			if( (ecinfo.size > EC_CONTENT_MAX_SIZE) 
+				|| (ecinfo.start_addr > EC_CONTENT_MAX_SIZE) ){
+				printk(KERN_ERR "program ie : size OR start_addr is out of 64KB, we only support with 64KB, too big...\n");
 				return -EINVAL;
 			}
 
+			if(ecinfo.size % PIECE_SIZE){
+				temp_size = ecinfo.size;
+				ecinfo.size = (ecinfo.size / PIECE_SIZE + 1) * PIECE_SIZE;
+			}
 			ecinfo.buf = (u8 *)kmalloc(ecinfo.size, GFP_KERNEL);
 			if(ecinfo.buf == NULL){
 				printk(KERN_ERR "program ie : kmalloc failed.\n");
@@ -547,9 +624,14 @@ static int misc_ioctl(struct inode * inode, struct file *filp, u_int cmd, u_long
 				ecinfo.buf = NULL;
 				return -EFAULT;
 			}
-#if 1
-			ec_program_rom(&ecinfo, PROGRAM_FLAG_IE);
-#endif
+		
+			/* fill the PIECE pad */	
+			for(i = temp_size; i < ecinfo.size; i++){
+				*(u8 *)((u8 *)ecinfo.buf + i) = 0xff;
+			}
+			
+			ec_program_piece(&ecinfo);
+			
 			kfree(ecinfo.buf);
 			ecinfo.buf = NULL;
 			break;
@@ -575,9 +657,9 @@ static int misc_ioctl(struct inode * inode, struct file *filp, u_int cmd, u_long
 				ecinfo.buf = NULL;
 				return -EFAULT;
 			}
-#if 1
-			ec_program_rom(&ecinfo, PROGRAM_FLAG_ROM);
-#endif
+	
+			ec_program_rom(&ecinfo);
+	
 			kfree(ecinfo.buf);
 			ecinfo.buf = NULL;
 			break;
@@ -636,6 +718,7 @@ static struct miscdevice ecmisc_device = {
 	.fops		= &ecmisc_fops
 };
 
+#ifndef	NO_ROM_ID_NEEDED
 static int misc_get_ec_rom_id(void)
 {
 	unsigned char regval, i;
@@ -678,16 +761,18 @@ static int misc_get_ec_rom_id(void)
 
 	return 0;
 }
+#endif
 
 static int __init ecmisc_init(void)
 {
 	int ret;
 
+#ifndef	NO_ROM_ID_NEEDED
 	ret = misc_get_ec_rom_id();
 	if(ret){
 		return ret;
 	}
-
+#endif
 	printk(KERN_INFO "EC misc device init.\n");
 	ret = misc_register(&ecmisc_device);
 
