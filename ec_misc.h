@@ -141,7 +141,8 @@
 
 /* timeout value for programming */
 #define	EC_FLASH_TIMEOUT	0x1000	// ec program timeout
-
+#define	EC_CMD_TIMEOUT		0x1000	// command checkout timeout including cmd to port or state flag check
+#define	SPI_FINISH_WAIT_TIME	10
 /* EC content max size */
 #define	EC_CONTENT_MAX_SIZE	(64 * 1024)
 #define	IE_CONTENT_MAX_SIZE	(0x100000 - IE_START_ADDR)
@@ -181,3 +182,4 @@ struct ec_info {
 	u32 size;
 	u8	*buf;
 };
+

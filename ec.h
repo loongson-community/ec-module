@@ -12,7 +12,7 @@
 #include	<asm/io.h>
 #include	<asm/system.h>
 
-#define VERSION		"1.33"
+#define VERSION		"1.34"
 
 /* 
  * The following registers are determined by the EC index configuration.
@@ -215,28 +215,7 @@
 #define PRINTK_DBG(args...)
 #endif
 
-/* read a 8bits ec register */
-static inline unsigned char ec_read(unsigned short addr)
-{
-	outb( (addr & 0xff00) >> 8, EC_IO_PORT_HIGH );
-	outb( (addr & 0x00ff), EC_IO_PORT_LOW );
-	return inb(EC_IO_PORT_DATA);
-}
-
-/* write a 8bits ec register with val */
-static inline void ec_write(unsigned short addr, unsigned char val)
-{
-	outb( (addr & 0xff00) >> 8, EC_IO_PORT_HIGH );
-	outb( (addr & 0x00ff), EC_IO_PORT_LOW );
-	outb( val, EC_IO_PORT_DATA );
-	inb( EC_IO_PORT_DATA );
-	return;
-}
-
-/********************************************************/
-
 extern void _rdmsr(u32 addr, u32 *hi, u32 *lo);
 extern void _wrmsr(u32 addr, u32 hi, u32 lo);
-
 /****************************************************************/
 

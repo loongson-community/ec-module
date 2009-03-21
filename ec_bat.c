@@ -29,7 +29,7 @@
 #include <linux/timer.h>
 #include <asm/delay.h>
 #include "ec.h"
-
+#include "ec_misc_fn.h"
 /************************************************************************/
 #ifndef	APM_32_BIT_SUPPORT
 #define	APM_32_BIT_SUPPORT	0x0002
@@ -97,8 +97,6 @@ struct apm_pwr_info {
 	unsigned int bat_temperature;
 };
 
-DEFINE_SPINLOCK(ec_access_lock);
-//extern spinlock_t	ec_access_lock;
 static struct task_struct *battery_tsk;
 
 static DEFINE_MUTEX(bat_info_lock);
@@ -244,10 +242,8 @@ static int battery_manager(void *arg)
 	unsigned char	power_flag;
 	unsigned char	bat_status;
 	unsigned char	charge_status;
-	unsigned long	flags;
 
 	/* read out the fixed value */
-	spin_lock_irqsave(&ec_access_lock, flags);
 	bat_info.bat_design_cap = (ec_read(REG_BAT_DESIGN_CAP_HIGH) << 8) 
 		| ec_read(REG_BAT_DESIGN_CAP_LOW);
 	bat_info.bat_full_charged_cap = (ec_read(REG_BAT_FULLCHG_CAP_HIGH) << 8)
@@ -256,7 +252,6 @@ static int battery_manager(void *arg)
 		| ec_read(REG_BAT_DESIGN_VOL_LOW);
 	bat_info.bat_vendor = ec_read(REG_BAT_VENDOR);
 	bat_info.bat_cell_count = ec_read(REG_BAT_CELL_COUNT);
-	spin_unlock_irqrestore(&ec_access_lock, flags);
 	if(bat_info.bat_vendor != 0){
 		printk(KERN_INFO "battery vendor(%s), cells count(%d), with designed capacity(%d),designed voltage(%d), full charged capacity(%d)\n", (bat_info.bat_vendor == FLAG_BAT_VENDOR_SANYO)?"SANYO":"SIMPLO", (bat_info.bat_cell_count == FLAG_BAT_CELL_3S1P) ? 3 : 6, bat_info.bat_design_cap, bat_info.bat_design_vol, bat_info.bat_full_charged_cap);
 	}
@@ -272,7 +267,6 @@ static int battery_manager(void *arg)
 
 		mutex_lock(&bat_info_lock);
 
-		spin_lock_irqsave(&ec_access_lock, flags);
 		bat_charge = ec_read(REG_BAT_CHARGE);
 		power_flag = ec_read(REG_BAT_POWER);
 		bat_status = ec_read(REG_BAT_STATUS);
@@ -281,7 +275,6 @@ static int battery_manager(void *arg)
 		bat_info.bat_current = (ec_read(REG_BAT_CURRENT_HIGH) << 8) | (ec_read(REG_BAT_CURRENT_LOW));
 		bat_info.bat_temperature = (ec_read(REG_BAT_TEMPERATURE_HIGH) << 8) | (ec_read(REG_BAT_TEMPERATURE_LOW));
 		bat_info.curr_bat_cap = (ec_read(REG_BAT_RELATIVE_CAP_HIGH) << 8) | (ec_read(REG_BAT_RELATIVE_CAP_LOW));
-		spin_unlock_irqrestore(&ec_access_lock, flags);
 
 
 		bat_info.ac_in = (power_flag & BIT_BAT_POWER_ACIN) ? APM_AC_ONLINE : APM_AC_OFFLINE;

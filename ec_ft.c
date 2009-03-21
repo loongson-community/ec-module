@@ -30,7 +30,7 @@
 #include <linux/timer.h>
 #include <asm/delay.h>
 #include "ec.h"
-
+#include "ec_misc_fn.h"
 /************************************************************************/
 
 #define	EC_FT_DEV		"ft"
@@ -41,8 +41,6 @@
 
 static struct task_struct *ft_tsk;
 static DEFINE_MUTEX(ft_info_lock);
-
-extern spinlock_t ec_access_lock;
 
 /* driver version */
 static const char driver_version[] = VERSION;
@@ -115,7 +113,6 @@ static int ft_proc_read(char *page, char **start, off_t off, int count, int *eof
 
 static int ft_manager(void *arg)
 {
-	unsigned long flags;
 	u8 val, reg_val;
 
 	PRINTK_DBG(KERN_DEBUG "Fan & Temperature Management thread started.\n");
@@ -129,11 +126,9 @@ static int ft_manager(void *arg)
 
 		mutex_lock(&ft_info_lock);
 
-		spin_lock_irqsave(&ec_access_lock, flags);
 		val = ec_read(REG_FAN_STATUS);
 		ft_info.fan_speed = FAN_SPEED_DIVIDER / ( ((ec_read(REG_FAN_SPEED_HIGH) & 0x0f) << 8) | ec_read(REG_FAN_SPEED_LOW) );
 		reg_val = ec_read(REG_TEMPERATURE_VALUE);
-		spin_unlock_irqrestore(&ec_access_lock, flags);
 
 		if(val)
 				ft_info.fan_on = FAN_STATUS_ON;
