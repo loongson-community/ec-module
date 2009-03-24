@@ -414,10 +414,10 @@ static int ec_read_byte(unsigned int addr, unsigned char *byte)
 	
 	*byte = ec_read(REG_XBISPIDAT);
 
+out :
 	/* disable spicmd writing. */
 	ec_stop_spi();
 
-out :
 	return ret;
 }
 
@@ -450,10 +450,10 @@ static int ec_write_byte(unsigned int addr, unsigned char byte)
 			goto out;
 	}
 	
+out :
 	/* disable spicmd writing. */
 	ec_stop_spi();
 
-out :
 	return ret;
 }
 
@@ -523,10 +523,10 @@ static int ec_unit_erase(unsigned char erase_cmd, unsigned int addr)
 			goto out;
 	}
 
+out :
 	/* disable spicmd writing. */
 	ec_stop_spi();
 
-out :
 	return ret;
 }
 
@@ -649,6 +649,7 @@ static int ec_program_rom(struct ec_info *info)
 	ec_write(REG_XBISPICMD, SPICMD_WRITE_ENABLE);
 	if(rom_instruction_cycle(SPICMD_WRITE_ENABLE) == EC_STATE_BUSY){
 			printk(KERN_ERR "EC_PROGRAM_ROM : SPICMD_WRITE_ENABLE failed.\n");
+			ec_stop_spi();
 			return -EINVAL;
 	}
 	
@@ -656,6 +657,7 @@ static int ec_program_rom(struct ec_info *info)
 	ec_write(REG_XBISPICMD, SPICMD_READ_STATUS);
 	if(rom_instruction_cycle(SPICMD_READ_STATUS) == EC_STATE_BUSY){
 			printk(KERN_ERR "EC_PROGRAM_ROM : SPICMD_READ_STATUS failed.\n");
+			ec_stop_spi();
 			return -EINVAL;
 	}
 	status = ec_read(REG_XBISPIDAT);
@@ -663,12 +665,14 @@ static int ec_program_rom(struct ec_info *info)
 	ec_write(REG_XBISPIDAT, status | 0x1C);
 	if(ec_instruction_cycle() < 0){
 			printk(KERN_ERR "EC_PROGRAM_ROM : write status value failed.\n");
+			ec_stop_spi();
 			return -EINVAL;
 	}
 
 	ec_write(REG_XBISPICMD, SPICMD_WRITE_STATUS);
 	if(rom_instruction_cycle(SPICMD_WRITE_STATUS) == EC_STATE_BUSY){
 			printk(KERN_ERR "EC_PROGRAM_ROM : SPICMD_WRITE_STATUS failed.\n");
+			ec_stop_spi();
 			return -EINVAL;
 	}
 #endif
@@ -677,6 +681,7 @@ static int ec_program_rom(struct ec_info *info)
 	ec_write(REG_XBISPICMD, SPICMD_WRITE_DISABLE);
 	if(rom_instruction_cycle(SPICMD_WRITE_DISABLE) == EC_STATE_BUSY){
 			printk(KERN_ERR "EC_PROGRAM_ROM : SPICMD_WRITE_DISABLE failed.\n");
+			ec_stop_spi();
 			return -EINVAL;
 	}
 	
