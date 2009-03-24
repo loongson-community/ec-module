@@ -34,14 +34,8 @@
 #include "ec_misc.h"
 
 /*******************************************************************/
+/* open for using rom protection action */
 #define	EC_ROM_PROTECTION
-
-/* read ec rom id from flash chip */
-#define	NO_ROM_ID_NEEDED	// we need no rom id for read operation
-#ifndef	NO_ROM_ID_NEEDED
-#define	EC_ROM_ID_SIZE	3
-unsigned char  ec_rom_id[EC_ROM_ID_SIZE];
-#endif
 
 /* this spinlock is dedicated for ec_read & ec_write function */
 DEFINE_SPINLOCK(index_access_lock);
@@ -127,6 +121,7 @@ int ec_query_seq(unsigned char cmd)
 }
 
 EXPORT_SYMBOL_GPL(ec_query_seq);
+
 /************************************************************************/
 
 /* enable the chip reset mode */
@@ -202,7 +197,7 @@ static void ec_exit_reset_mode(void)
 static void ec_reboot_system(void)
 {
 	ec_query_seq(CMD_REBOOT_SYSTEM);
-	PRINTK_DBG(KERN_INFO "reboot system...................\n");
+	printk(KERN_INFO "reboot system...................\n");
 }
 
 /* make ec goto idle mode */
@@ -248,21 +243,116 @@ static int ec_exit_idle_mode(void)
 	return 0;
 }
 
-/* To see if the ec is in busy state or not. */
-static inline int ec_flash_busy(void)
-{
-	unsigned char count = 0;
+/**********************************************************************/
 
-	while(count < 10){
+static int ec_instruction_cycle(void)
+{
+	unsigned long timeout;
+	int ret = 0;
+
+	timeout = EC_FLASH_TIMEOUT;
+	while(timeout-- >= 0){
+		if( !(ec_read(REG_XBISPICFG) & SPICFG_SPI_BUSY) )
+				break;
+	}
+	if(timeout <= 0){
+		printk(KERN_ERR "EC_INSTRUCTION_CYCLE : timeout for check flag.\n");
+		ret = -EINVAL;
+		goto out;
+	}
+
+out :
+	return ret;
+}
+
+/* To see if the ec is in busy state or not. */
+static inline int ec_flash_busy(unsigned long timeout)
+{
+	/* assurance the first command be going to rom */
+	if( ec_instruction_cycle() < 0 ){
+		return EC_STATE_BUSY;
+	}
+
+#if	1
+	timeout = timeout / EC_MAX_DELAY_UNIT;
+	while(timeout-- > 0){
+		/* check the rom's status of busy flag */
 		ec_write(REG_XBISPICMD, SPICMD_READ_STATUS);
-		while( (ec_read(REG_XBISPICFG)) & SPICFG_SPI_BUSY );
+		if( ec_instruction_cycle() < 0 ){
+			return EC_STATE_BUSY;
+		}	
 		if((ec_read(REG_XBISPIDAT) & 0x01) == 0x00){
 			return EC_STATE_IDLE;
 		}
-		count++;
+		udelay(EC_MAX_DELAY_UNIT);
 	}
+	if( timeout <= 0 ){
+		printk(KERN_ERR "EC_FLASH_BUSY : timeout for check rom flag.\n");
+		return EC_STATE_BUSY;
+	}
+#else
+	/* check the rom's status of busy flag */
+	ec_write(REG_XBISPICMD, SPICMD_READ_STATUS);
+	if( ec_instruction_cycle() < 0 ){
+		return EC_STATE_BUSY;
+	}	
 
-	return EC_STATE_BUSY;
+	timeout = timeout / EC_MAX_DELAY_UNIT;
+	while(timeout-- > 0){
+		if((ec_read(REG_XBISPIDAT) & 0x01) == 0x00){
+			return EC_STATE_IDLE;
+		}
+		udelay(EC_MAX_DELAY_UNIT);
+	}
+	if( timeout <= 0 ){
+		printk(KERN_ERR "EC_FLASH_BUSY : timeout for check rom flag.\n");
+		return EC_STATE_BUSY;
+	}
+#endif
+
+	return EC_STATE_IDLE;
+}
+
+static int rom_instruction_cycle(unsigned char cmd)
+{
+	unsigned long timeout = 0;
+
+	switch(cmd){
+		case	SPICMD_READ_STATUS :
+		case	SPICMD_WRITE_ENABLE :
+		case	SPICMD_WRITE_DISABLE :
+		case	SPICMD_READ_BYTE :
+		case	SPICMD_HIGH_SPEED_READ :
+				timeout = 0;
+				break;
+		case	SPICMD_WRITE_STATUS :
+				timeout = 300 * 1000;
+				break;
+		case	SPICMD_BYTE_PROGRAM :
+				timeout = 5 * 1000;
+				break;
+		case	SPICMD_SST_SEC_ERASE :
+		case	SPICMD_SEC_ERASE :
+				timeout = 1000 * 1000;
+				break;
+		case	SPICMD_SST_BLK_ERASE :
+		case	SPICMD_BLK_ERASE :
+				timeout = 3 * 1000 * 1000;
+				break;
+		case	SPICMD_SST_CHIP_ERASE :
+		case	SPICMD_CHIP_ERASE :
+				timeout = 20 * 1000 * 1000;
+				break;
+		default :
+				timeout = EC_SPICMD_STANDARD_TIMEOUT;
+	}
+	if(timeout == 0){
+		return ec_instruction_cycle();
+	}
+	if(timeout < EC_SPICMD_STANDARD_TIMEOUT)
+			timeout = EC_SPICMD_STANDARD_TIMEOUT;
+
+	return ec_flash_busy(timeout);
 }
 
 /* delay for start/stop action */
@@ -297,70 +387,31 @@ static void ec_stop_spi(void)
 /* read one byte from xbi interface */
 static int ec_read_byte(unsigned int addr, unsigned char *byte)
 {
-	unsigned int timeout;
 	int ret = 0;
 
 	/* enable spicmd writing. */
 	ec_start_spi();
 
-	/* check is it busy. */
-	if(ec_flash_busy() == EC_STATE_BUSY){
-			printk(KERN_ERR "flash : flash busy while enable spicmd.\n");
+	/* enable write spi flash */
+	ec_write(REG_XBISPICMD, SPICMD_WRITE_ENABLE);
+	if(rom_instruction_cycle(SPICMD_WRITE_ENABLE) == EC_STATE_BUSY){
+			printk(KERN_ERR "EC_READ_BYTE : SPICMD_WRITE_ENABLE failed.\n");
 			ret = -EINVAL;
 			goto out;
 	}
-
-	/* enable write spi flash */
-	ec_write(REG_XBISPICMD, SPICMD_WRITE_ENABLE);
-	timeout = EC_FLASH_TIMEOUT;
-	while(timeout-- >= 0){
-		if( !(ec_read(REG_XBISPICFG) & SPICFG_SPI_BUSY) )
-				break;
-	}
-	if(timeout <= 0){
-		printk(KERN_ERR "flash : flash busy while enable write spi.\n");
-		ret = -EINVAL;
-		goto out;
-	}
-
+	
 	/* write the address */
 	ec_write(REG_XBISPIA2, (addr & 0xff0000) >> 16);
 	ec_write(REG_XBISPIA1, (addr & 0x00ff00) >> 8);
 	ec_write(REG_XBISPIA0, (addr & 0x0000ff) >> 0);
 	/* start action */
-#ifndef	NO_ROM_ID_NEEDED
-	switch(ec_rom_id[0]){
-		case EC_ROM_PRODUCT_ID_SPANSION :
-			ec_write(REG_XBISPICMD, SPICMD_READ_BYTE);
-			//ec_write(REG_XBISPICMD, SPICMD_HIGH_SPEED_READ);
-			break;
-		case EC_ROM_PRODUCT_ID_MXIC : 
-			ec_write(REG_XBISPICMD, SPICMD_HIGH_SPEED_READ);
-			break;
-		case EC_ROM_PRODUCT_ID_AMIC :
-			ec_write(REG_XBISPICMD, SPICMD_HIGH_SPEED_READ);
-			break;
-		case EC_ROM_PRODUCT_ID_EONIC :
-			ec_write(REG_XBISPICMD, SPICMD_HIGH_SPEED_READ);
-			break;
-		default :
-			printk("EC : not supported flash chip type, using default read action instead.\n");
-			ec_write(REG_XBISPICMD, SPICMD_READ_BYTE);
-			break;
-	}
-#else
 	ec_write(REG_XBISPICMD, SPICMD_HIGH_SPEED_READ);
-#endif
-	timeout = EC_FLASH_TIMEOUT;
-	while(timeout-- >= 0){
-		if( !(ec_read(REG_XBISPICFG) & SPICFG_SPI_BUSY) )
-				break;
+	if(rom_instruction_cycle(SPICMD_HIGH_SPEED_READ) == EC_STATE_BUSY){
+			printk(KERN_ERR "EC_READ_BYTE : SPICMD_HIGH_SPEED_READ failed.\n");
+			ret = -EINVAL;
+			goto out;
 	}
-	if(timeout <= 0){
-		printk(KERN_ERR "flash : start action timeout.\n");
-		ret = -EINVAL;
-		goto out;
-	}
+	
 	*byte = ec_read(REG_XBISPIDAT);
 
 	/* disable spicmd writing. */
@@ -373,30 +424,17 @@ out :
 /* write one byte to ec rom */
 static int ec_write_byte(unsigned int addr, unsigned char byte)
 {
-	unsigned int timeout;
 	int ret = 0;
 
 	/* enable spicmd writing. */
 	ec_start_spi();
 
-	/* check is it busy. */
-	if(ec_flash_busy() == EC_STATE_BUSY){
-			printk(KERN_ERR "flash : flash busy while enable spicmd.\n");
-			ret = -EINVAL;
-			goto out;
-	}
-
 	/* enable write spi flash */
 	ec_write(REG_XBISPICMD, SPICMD_WRITE_ENABLE);
-	timeout = EC_FLASH_TIMEOUT;
-	while(timeout-- >= 0){
-		if( !(ec_read(REG_XBISPICFG) & SPICFG_SPI_BUSY) )
-				break;
-	}
-	if(timeout <= 0){
-		printk(KERN_ERR "flash : flash busy while enable write spi.\n");
-		ret = -EINVAL;
-		goto out;
+	if(rom_instruction_cycle(SPICMD_WRITE_ENABLE) == EC_STATE_BUSY){
+			printk(KERN_ERR "EC_WRITE_BYTE : SPICMD_WRITE_ENABLE failed.\n");
+			ret = -EINVAL;
+			goto out;
 	}
 
 	/* write the address */
@@ -406,27 +444,15 @@ static int ec_write_byte(unsigned int addr, unsigned char byte)
 	ec_write(REG_XBISPIDAT, byte);
 	/* start action */
 	ec_write(REG_XBISPICMD, SPICMD_BYTE_PROGRAM);
-	timeout = EC_FLASH_TIMEOUT;
-	while(timeout-- >= 0){
-		if( !(ec_read(REG_XBISPICFG) & SPICFG_SPI_BUSY) )
-				break;
-	}
-	if(timeout <= 0){
-		printk(KERN_ERR "flash : start action timeout.\n");
-		ret = -EINVAL;
-		goto out;
-	}
-
-	/* disable spicmd writing. */
-	ec_stop_spi();
-
-/*
-	if(ec_flash_busy()){
-			printk(KERN_ERR "flash : flash busy.\n");
+	if(rom_instruction_cycle(SPICMD_BYTE_PROGRAM) == EC_STATE_BUSY){
+			printk(KERN_ERR "EC_WRITE_BYTE : SPICMD_BYTE_PROGRAM failed.\n");
 			ret = -EINVAL;
 			goto out;
 	}
-*/
+	
+	/* disable spicmd writing. */
+	ec_stop_spi();
+
 out :
 	return ret;
 }
@@ -435,85 +461,51 @@ out :
 static int ec_unit_erase(unsigned char erase_cmd, unsigned int addr)
 {
 	unsigned char status;
-	unsigned int timeout;
 	int ret = 0;
 
 	/* enable spicmd writing. */
 	ec_start_spi();
 
-	/* check is it busy. */
-	if(ec_flash_busy() == EC_STATE_BUSY){
-			printk(KERN_ERR "flash : busy while erase.\n");
-			ret = -EINVAL;
-			goto out;
-	}
-
 	/* enable write spi flash */
 	ec_write(REG_XBISPICMD, SPICMD_WRITE_ENABLE);
-	timeout = EC_FLASH_TIMEOUT;
-	while(timeout-- >= 0){
-		if( !(ec_read(REG_XBISPICFG) & SPICFG_SPI_BUSY) )
-				break;
-	}
-	if(timeout <= 0){
-		printk(KERN_ERR "timeout while enable write spi flash.\n");
-		ret = -EINVAL;
-		goto out;
+	if(rom_instruction_cycle(SPICMD_WRITE_ENABLE) == EC_STATE_BUSY){
+			printk(KERN_ERR "EC_UNIT_ERASE : SPICMD_WRITE_ENABLE failed.\n");
+			ret = -EINVAL;
+			goto out;
 	}
 
 #ifdef	EC_ROM_PROTECTION
 	/* unprotect the status register of rom */
 	ec_write(REG_XBISPICMD, SPICMD_READ_STATUS);
-	timeout = EC_FLASH_TIMEOUT;
-	while(timeout-- >= 0){
-		if( !(ec_read(REG_XBISPICFG) & SPICFG_SPI_BUSY) )
-				break;
-	}
-	if(timeout <= 0){
-		printk(KERN_ERR "timeout while read the status register.\n");
-		ret = -EINVAL;
-		goto out;
+	if(rom_instruction_cycle(SPICMD_READ_STATUS) == EC_STATE_BUSY){
+			printk(KERN_ERR "EC_UNIT_ERASE : SPICMD_READ_STATUS failed.\n");
+			ret = -EINVAL;
+			goto out;
 	}
 	status = ec_read(REG_XBISPIDAT);
 
 	//ec_write(REG_XBISPIDAT, status & 0xE3);
 	ec_write(REG_XBISPIDAT, status & 0x02);
-	//ec_write(REG_XBISPIDAT, 0x02);
-	timeout = EC_FLASH_TIMEOUT;
-	while(timeout-- >= 0){
-			if( !(ec_read(REG_XBISPICFG) & SPICFG_SPI_BUSY) )
-				break;
-	}
-	if(timeout <= 0){
-		printk("timeout while unprotect the status REG_XBISPIDAT.\n");
-		return -EINVAL;
+	if(ec_instruction_cycle() < 0){
+			printk(KERN_ERR "EC_UNIT_ERASE : write status value failed.\n");
+			ret = -EINVAL;
+			goto out;
 	}
 
 	ec_write(REG_XBISPICMD, SPICMD_WRITE_STATUS);
-	timeout = EC_FLASH_TIMEOUT;
-	while(timeout-- >= 0){
-		if( !(ec_read(REG_XBISPICFG) & SPICFG_SPI_BUSY) )
-				break;
-	}
-	if(timeout <= 0){
-		printk(KERN_ERR "timeout while unprotect the status register.\n");
-		ret = -EINVAL;
-		goto out;
+	if(rom_instruction_cycle(SPICMD_WRITE_STATUS) == EC_STATE_BUSY){
+			printk(KERN_ERR "EC_UNIT_ERASE : SPICMD_WRITE_STATUS failed.\n");
+			ret = -EINVAL;
+			goto out;
 	}
 	
 	/* enable write spi flash */
 	ec_write(REG_XBISPICMD, SPICMD_WRITE_ENABLE);
-	timeout = EC_FLASH_TIMEOUT;
-	while(timeout-- >= 0){
-		if( !(ec_read(REG_XBISPICFG) & SPICFG_SPI_BUSY) )
-				break;
+	if(rom_instruction_cycle(SPICMD_WRITE_ENABLE) == EC_STATE_BUSY){
+			printk(KERN_ERR "EC_UNIT_ERASE : SPICMD_WRITE_ENABLE failed.\n");
+			ret = -EINVAL;
+			goto out;
 	}
-	if(timeout <= 0){
-		printk(KERN_ERR "timeout while enable write spi flash.\n");
-		ret = -EINVAL;
-		goto out;
-	}
-
 #endif
 
 	/* block address fill */
@@ -525,16 +517,12 @@ static int ec_unit_erase(unsigned char erase_cmd, unsigned int addr)
 
 	/* erase the whole chip first */
 	ec_write(REG_XBISPICMD, erase_cmd);
-	timeout = 256 * EC_FLASH_TIMEOUT;
-	while(timeout-- >= 0){
-		if( !(ec_read(REG_XBISPICFG) & SPICFG_SPI_BUSY) )
-				break;
+	if(rom_instruction_cycle(erase_cmd) == EC_STATE_BUSY){
+			printk(KERN_ERR "EC_UNIT_ERASE : erase failed.\n");
+			ret = -EINVAL;
+			goto out;
 	}
-	if(timeout <= 0){
-		printk(KERN_ERR "timeout while erase flash.\n");
-		ret = -EINVAL;
-		goto out;
-	}
+
 	/* disable spicmd writing. */
 	ec_stop_spi();
 
@@ -595,7 +583,7 @@ retry :
 		/* make chip goto program bytes */
 		ret = ec_query_seq(CMD_PROGRAM_PIECE);
 		if(ret < 0){
-			printk(KERN_ERR "ec issue program byte failed.\n");
+			printk(KERN_ERR "ec piece issue program byte failed.\n");
 			return ret;
 		}
 
@@ -615,8 +603,7 @@ static int ec_program_rom(struct ec_info *info)
 	unsigned char data;
 	unsigned char val = 0;
 	int ret = 0;
-	int i;
-	unsigned long timeout;
+	int i, j;
 	unsigned char status;
 
 	ret = ec_init_reset_mode();
@@ -660,71 +647,50 @@ static int ec_program_rom(struct ec_info *info)
 
 	/* enable write spi flash */
 	ec_write(REG_XBISPICMD, SPICMD_WRITE_ENABLE);
-	timeout = EC_FLASH_TIMEOUT;
-	while(timeout-- >= 0){
-		if( !(ec_read(REG_XBISPICFG) & SPICFG_SPI_BUSY) )
-				break;
+	if(rom_instruction_cycle(SPICMD_WRITE_ENABLE) == EC_STATE_BUSY){
+			printk(KERN_ERR "EC_PROGRAM_ROM : SPICMD_WRITE_ENABLE failed.\n");
+			return -EINVAL;
 	}
-	if(timeout <= 0){
-		printk(KERN_ERR "timeout while enable write spi flash.\n");
-		return -EINVAL;
-	}
-
+	
 	/* protect the status register of rom */
 	ec_write(REG_XBISPICMD, SPICMD_READ_STATUS);
-	timeout = EC_FLASH_TIMEOUT;
-	while(timeout-- >= 0){
-		if( !(ec_read(REG_XBISPICFG) & SPICFG_SPI_BUSY) )
-				break;
-	}
-	if(timeout <= 0){
-		printk(KERN_ERR "timeout while read the status register.\n");
-		return -EINVAL;
+	if(rom_instruction_cycle(SPICMD_READ_STATUS) == EC_STATE_BUSY){
+			printk(KERN_ERR "EC_PROGRAM_ROM : SPICMD_READ_STATUS failed.\n");
+			return -EINVAL;
 	}
 	status = ec_read(REG_XBISPIDAT);
 
 	ec_write(REG_XBISPIDAT, status | 0x1C);
-	//ec_write(REG_XBISPIDAT, 0x1C);
-	timeout = EC_FLASH_TIMEOUT;
-	while(timeout-- >= 0){
-		if( !(ec_read(REG_XBISPICFG) & SPICFG_SPI_BUSY) )
-				break;
-	}
-	if(timeout <= 0){
-		printk(KERN_ERR "timeout while unprotect the status register.\n");
-		return -EINVAL;
+	if(ec_instruction_cycle() < 0){
+			printk(KERN_ERR "EC_PROGRAM_ROM : write status value failed.\n");
+			return -EINVAL;
 	}
 
 	ec_write(REG_XBISPICMD, SPICMD_WRITE_STATUS);
-	timeout = EC_FLASH_TIMEOUT;
-	while(timeout-- >= 0){
-		if( !(ec_read(REG_XBISPICFG) & SPICFG_SPI_BUSY) )
-				break;
-	}
-	if(timeout <= 0){
-		printk(KERN_ERR "timeout while unprotect the status register.\n");
-		return -EINVAL;
+	if(rom_instruction_cycle(SPICMD_WRITE_STATUS) == EC_STATE_BUSY){
+			printk(KERN_ERR "EC_PROGRAM_ROM : SPICMD_WRITE_STATUS failed.\n");
+			return -EINVAL;
 	}
 #endif
 
 	/* disable the write action to spi rom */
 	ec_write(REG_XBISPICMD, SPICMD_WRITE_DISABLE);
-	timeout = EC_FLASH_TIMEOUT;
-	while(timeout-- >= 0){
-		if( !(ec_read(REG_XBISPICFG) & SPICFG_SPI_BUSY) )
-				break;
-	}
-	if(timeout <= 0){
-		printk(KERN_ERR "flash : flash busy while disable write spi.\n");
-		return -EINVAL;
+	if(rom_instruction_cycle(SPICMD_WRITE_DISABLE) == EC_STATE_BUSY){
+			printk(KERN_ERR "EC_PROGRAM_ROM : SPICMD_WRITE_DISABLE failed.\n");
+			return -EINVAL;
 	}
 	
+	/* we should stop spi access firstly */
+	ec_stop_spi();
+
 	/* for security */
-	udelay(2000000);
+	for(j = 0; j < 2000; j++)
+		udelay(1000);
 	/* exit from the reset mode */
 	ec_exit_reset_mode();
 	/* for security */
-	udelay(1000000);
+	for(j = 0; j < 1000; j++)
+		udelay(1000);
 	/* re-power the whole system */
 	ec_reboot_system();
 	return 0;
@@ -918,61 +884,10 @@ static struct miscdevice ecmisc_device = {
 	.fops		= &ecmisc_fops
 };
 
-#ifndef	NO_ROM_ID_NEEDED
-static int misc_get_ec_rom_id(void)
-{
-	unsigned char regval, i;
-	int ret = 0;
-	
-	/* entering ec idle mode */
-	ret = ec_init_idle_mode();
-	if(ret < 0){
-		return ret;
-	}
-
-	/* get product id from ec rom */
-	udelay(EC_REG_DELAY);
-	regval = ec_read(REG_XBISPICFG);
-	regval |= 0x18;
-	ec_write(REG_XBISPICFG, regval);
-	udelay(EC_REG_DELAY);
-	
-	ec_write(REG_XBISPICMD, 0x9f);
-	while( (ec_read(REG_XBISPICFG)) & (1 << 1) );
-	
-	for(i = 0; i < EC_ROM_ID_SIZE; i++){
-		ec_write(REG_XBISPICMD, 0x00);
-		while( (ec_read(REG_XBISPICFG)) & (1 << 1) );
-		ec_rom_id[i] = ec_read(REG_XBISPIDAT);
-	}
-	udelay(EC_REG_DELAY);
-	regval = ec_read(REG_XBISPICFG);
-	regval &= 0xE7;
-	ec_write(REG_XBISPICFG, regval);
-	udelay(EC_REG_DELAY);
-
-	/* ec exit from idle mode */
-	ret = ec_exit_idle_mode();
-	if(ret < 0){
-		return ret;
-	}
-
-	PRINTK_DBG(KERN_INFO "EC ROM ID : 0x%x, 0x%x, 0x%x\n", ec_rom_id[0], ec_rom_id[1], ec_rom_id[2]);
-
-	return 0;
-}
-#endif
-
 static int __init ecmisc_init(void)
 {
 	int ret;
 
-#ifndef	NO_ROM_ID_NEEDED
-	ret = misc_get_ec_rom_id();
-	if(ret){
-		return ret;
-	}
-#endif
 	printk(KERN_INFO "EC misc device init.\n");
 	ret = misc_register(&ecmisc_device);
 

@@ -142,6 +142,8 @@
 /* timeout value for programming */
 #define	EC_FLASH_TIMEOUT	0x1000	// ec program timeout
 #define	EC_CMD_TIMEOUT		0x1000	// command checkout timeout including cmd to port or state flag check
+#define	EC_SPICMD_STANDARD_TIMEOUT	(4 * 1000)	// unit : us
+#define	EC_MAX_DELAY_UNIT	(10)			// every time for polling
 #define	SPI_FINISH_WAIT_TIME	10
 /* EC content max size */
 #define	EC_CONTENT_MAX_SIZE	(64 * 1024)
