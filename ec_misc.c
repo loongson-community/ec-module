@@ -568,7 +568,7 @@ retry :
 		}
 		
 		/* program piece action */
-		if( (addr == IE_START_ADDR) && (i == 0) ){
+		if( ((addr == IE_START_ADDR) || (addr == IE_START_ADDR + 0x4000) || (addr == IE_START_ADDR + 0x8000) || (addr == IE_START_ADDR + 0xc000))  && (i == 0) ){
 			ec_write(PIECE_START_ADDR, FIRST_PIECE_YES);
 		}else{
 			ec_write(PIECE_START_ADDR, FIRST_PIECE_NO);
@@ -694,10 +694,10 @@ static int ec_program_rom(struct ec_info *info)
 	/* exit from the reset mode */
 	ec_exit_reset_mode();
 	/* for security */
-	for(j = 0; j < 1000; j++)
-		udelay(1000);
+//	for(j = 0; j < 1000; j++)
+//		udelay(1000);
 	/* re-power the whole system */
-	ec_reboot_system();
+//	ec_reboot_system();
 	return 0;
 }
 
