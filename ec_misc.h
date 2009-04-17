@@ -97,6 +97,7 @@
 /* watchdog timer registers */
 #define	REG_WDTCFG				0xfe80
 #define	REG_WDTPF				0xfe81
+#define REG_WDT					0xfe82
 
 /* lpc configure register */
 #define	REG_LPCCFG				0xfe95

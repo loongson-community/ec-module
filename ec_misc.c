@@ -2,10 +2,10 @@
  * EC(Embedded Controller) KB3310B misc device driver on Linux
  * Author	: liujl <liujl@lemote.com>
  * Date		: 2008-04-20
- *
+ * 
  * NOTE :
  * 		1, The EC resources accessing and programming are supported.
- */
+ */ 
 
 /*******************************************************************/
 
@@ -161,14 +161,14 @@ static int ec_init_reset_mode(void)
 	status = ec_read(REG_PXCFG);
 	status |= (1 << 0);
 	ec_write(REG_PXCFG, status);
-	udelay(EC_REG_DELAY);//
+	udelay(EC_REG_DELAY);
 
 	/* disable FWH/LPC */
 	udelay(EC_REG_DELAY);
 	status = ec_read(REG_LPCCFG);
 	status &= ~(1 << 7);
 	ec_write(REG_LPCCFG, status);
-	udelay(EC_REG_DELAY);//
+	udelay(EC_REG_DELAY);
 
 	PRINTK_DBG(KERN_INFO "entering reset mode ok..............\n");
 
@@ -192,13 +192,42 @@ static void ec_exit_reset_mode(void)
 
 	return;
 }
+/* make ec disable WDD */
+static void ec_disable_WDD(void)
+{
+	unsigned char status;
 
+	udelay(EC_REG_DELAY);
+	status = ec_read(REG_WDTCFG);
+	ec_write(REG_WDTPF, 0x03);
+	ec_write(REG_WDTCFG, (status&0x80)|0x48);
+	PRINTK_DBG(KERN_INFO "Disable WDD ok..................\n");
+
+	return;
+}
+
+/* make ec enable WDD */
+static void ec_enable_WDD(void)
+{
+	unsigned char status;
+
+	udelay(EC_REG_DELAY);
+	status = ec_read(REG_WDTCFG);
+	ec_write(REG_WDT, 0x28);		//set WDT 5sec(0x28)
+	ec_write(REG_WDTCFG, (status&0x80)|0x03);
+	PRINTK_DBG(KERN_INFO "Enable WDD ok..................\n");
+
+	return;
+}
+
+#if 0
 /* re-power the whole system for new ec firmware working correctly. */
 static void ec_reboot_system(void)
 {
 	ec_query_seq(CMD_REBOOT_SYSTEM);
 	printk(KERN_INFO "reboot system...................\n");
 }
+#endif
 
 /* make ec goto idle mode */
 static int ec_init_idle_mode(void)
@@ -457,54 +486,86 @@ out :
 	return ret;
 }
 
-/* erase one block or chip or sector as needed */
-static int ec_unit_erase(unsigned char erase_cmd, unsigned int addr)
+/* unprotect SPI ROM */
+/* EC_ROM_unprotect function code */
+static int EC_ROM_unprotect(void)
 {
 	unsigned char status;
-	int ret = 0;
-
-	/* enable spicmd writing. */
-	ec_start_spi();
 
 	/* enable write spi flash */
 	ec_write(REG_XBISPICMD, SPICMD_WRITE_ENABLE);
 	if(rom_instruction_cycle(SPICMD_WRITE_ENABLE) == EC_STATE_BUSY){
-			printk(KERN_ERR "EC_UNIT_ERASE : SPICMD_WRITE_ENABLE failed.\n");
-			ret = -EINVAL;
-			goto out;
+		printk(KERN_ERR "EC_UNIT_ERASE : SPICMD_WRITE_ENABLE failed.\n");
+		return 1;
 	}
 
-#ifdef	EC_ROM_PROTECTION
 	/* unprotect the status register of rom */
 	ec_write(REG_XBISPICMD, SPICMD_READ_STATUS);
 	if(rom_instruction_cycle(SPICMD_READ_STATUS) == EC_STATE_BUSY){
-			printk(KERN_ERR "EC_UNIT_ERASE : SPICMD_READ_STATUS failed.\n");
-			ret = -EINVAL;
-			goto out;
+		printk(KERN_ERR "EC_UNIT_ERASE : SPICMD_READ_STATUS failed.\n");
+		return 1;
 	}
 	status = ec_read(REG_XBISPIDAT);
-
-	//ec_write(REG_XBISPIDAT, status & 0xE3);
 	ec_write(REG_XBISPIDAT, status & 0x02);
 	if(ec_instruction_cycle() < 0){
-			printk(KERN_ERR "EC_UNIT_ERASE : write status value failed.\n");
-			ret = -EINVAL;
-			goto out;
+		printk(KERN_ERR "EC_UNIT_ERASE : write status value failed.\n");
+		return 1;
 	}
 
 	ec_write(REG_XBISPICMD, SPICMD_WRITE_STATUS);
 	if(rom_instruction_cycle(SPICMD_WRITE_STATUS) == EC_STATE_BUSY){
-			printk(KERN_ERR "EC_UNIT_ERASE : SPICMD_WRITE_STATUS failed.\n");
-			ret = -EINVAL;
-			goto out;
+		printk(KERN_ERR "EC_UNIT_ERASE : SPICMD_WRITE_STATUS failed.\n");
+		return 1;
 	}
-	
+
 	/* enable write spi flash */
 	ec_write(REG_XBISPICMD, SPICMD_WRITE_ENABLE);
 	if(rom_instruction_cycle(SPICMD_WRITE_ENABLE) == EC_STATE_BUSY){
-			printk(KERN_ERR "EC_UNIT_ERASE : SPICMD_WRITE_ENABLE failed.\n");
+		printk(KERN_ERR "EC_UNIT_ERASE : SPICMD_WRITE_ENABLE failed.\n");
+		return 1;
+	}
+
+	return 0;
+}
+
+/* erase one block or chip or sector as needed */
+static int ec_unit_erase(unsigned char erase_cmd, unsigned int addr)
+{
+	unsigned char status;
+	int ret = 0, i = 0;
+	int unprotect_count = 3;
+	int check_flag =0;
+
+	/* enable spicmd writing. */
+	ec_start_spi();
+
+#ifdef EC_ROM_PROTECTION
+	/* added for re-check SPICMD_READ_STATUS */
+	while(unprotect_count-- > 0){
+		if(EC_ROM_unprotect()){
 			ret = -EINVAL;
 			goto out;
+		}
+		
+		for(i = 0; i < ((2 - unprotect_count) * 100 + 10); i++)	//first time:500ms --> 5.5sec -->10.5sec
+			udelay(50000);
+		ec_write(REG_XBISPICMD, SPICMD_READ_STATUS);
+		if(rom_instruction_cycle(SPICMD_READ_STATUS) == EC_STATE_BUSY){
+			printk(KERN_ERR "EC_PROGRAM_ROM : SPICMD_READ_STATUS failed.\n");
+		} else {
+			status = ec_read(REG_XBISPIDAT);
+			PRINTK_DBG(KERN_INFO "Read unprotect status : 0x%x\n", status);
+			if((status & 0x1C) == 0x00){
+				PRINTK_DBG(KERN_INFO "Read unprotect status OK1 : 0x%x\n", status & 0x1C);
+				check_flag = 1;
+				break;
+			}
+		}	
+	}
+
+	if(!check_flag){
+		printk(KERN_INFO "SPI ROM unprotect fail.\n");
+		return 1;
 	}
 #endif
 
@@ -530,72 +591,10 @@ out :
 	return ret;
 }
 
-/* program the piece on spi rom with F/W mode */
-static int ec_program_piece(struct ec_info *info)
-{
-	unsigned int addr = info->start_addr + IE_START_ADDR;
-	unsigned long size = info->size;
-	unsigned int pieces;
-	unsigned char *ptr;
-	unsigned long timeout;
-	int i, j;
-	unsigned char status;
-	int ret = 0;
-
-	/* calculate the number of pieces and set the rest buffer with 0xff by default */
-	ptr = info->buf;
-	pieces = size / PIECE_SIZE;	
-
-retry :
-	for(i = 0; i < pieces; i++){
-	
-		/* check status for chip ready */
-		timeout = EC_FLASH_TIMEOUT;
-		while(timeout-- > 0){
-			status = ec_read(PIECE_STATUS_REG);
-			if( (status & PIECE_STATUS_PROGRAM_DONE) == 1 ){
-				if( (status & PIECE_STATUS_PROGRAM_ERROR) == 0 ){
-					break;
-				}else{
-					goto retry;
-				}
-			}		
-			udelay(EC_REG_DELAY);
-		}
-		if(timeout <= 0){
-			printk(KERN_ERR "timeout for check piece status.\n");
-			return -EINVAL;
-		}
-		
-		/* program piece action */
-		if( ((addr == IE_START_ADDR) || (addr == IE_START_ADDR + 0x4000) || (addr == IE_START_ADDR + 0x8000) || (addr == IE_START_ADDR + 0xc000))  && (i == 0) ){
-			ec_write(PIECE_START_ADDR, FIRST_PIECE_YES);
-		}else{
-			ec_write(PIECE_START_ADDR, FIRST_PIECE_NO);
-		}
-		ec_write(PIECE_START_ADDR + 1, (addr & 0xff) + i * PIECE_SIZE);
-		ec_write(PIECE_START_ADDR + 2, (addr & 0xff00) >> 8);
-		ec_write(PIECE_START_ADDR + 3, (addr & 0xff0000) >> 16);
-		for(j = 0; j < PIECE_SIZE; j++){
-			ec_write(PIECE_START_ADDR + j + 4, ptr[j + i * PIECE_SIZE]);
-		}
-
-		/* make chip goto program bytes */
-		ret = ec_query_seq(CMD_PROGRAM_PIECE);
-		if(ret < 0){
-			printk(KERN_ERR "ec piece issue program byte failed.\n");
-			return ret;
-		}
-
-	}
-
-	return 0;	
-}
-
 /* update the whole rom content with H/W mode
  * PLEASE USING ec_unit_erase() FIRSTLY
  */
-static int ec_program_rom(struct ec_info *info)
+static int ec_program_rom(struct ec_info *info, int flag)
 {
 	unsigned int addr = 0;
 	unsigned long size = 0;
@@ -606,21 +605,36 @@ static int ec_program_rom(struct ec_info *info)
 	int i, j;
 	unsigned char status;
 
-	ret = ec_init_reset_mode();
+	/* modify for program serial No, set IE_START_ADDR and use idle mode, disable WDD */
+	if (flag == PROGRAM_FLAG_ROM) {
+		ret = ec_init_reset_mode();
+		addr = info->start_addr + EC_START_ADDR;
+		PRINTK_DBG(KERN_INFO "PROGRAM_FLAG_ROM..............\n");
+	} else if (flag == PROGRAM_FLAG_IE) {
+		ret = ec_init_idle_mode();
+		ec_disable_WDD();
+		addr = info->start_addr + IE_START_ADDR;
+		PRINTK_DBG(KERN_INFO "PROGRAM_FLAG_IE..............\n");
+	} else {
+		return 0;
+	}
+
 	if(ret < 0){
+		if (flag == PROGRAM_FLAG_IE)
+			ec_enable_WDD();
 		return ret;
 	}
 
 	size = info->size;
 	ptr  = info->buf;
-	addr = info->start_addr + EC_START_ADDR;
     PRINTK_DBG(KERN_INFO "starting update ec ROM..............\n");
 
 	ret = ec_unit_erase(SPICMD_BLK_ERASE, addr);
 	if(ret){
 		printk(KERN_ERR "program ec : erase block failed.\n");
-		return -EINVAL;
+		goto out;
 	}
+	PRINTK_DBG(KERN_ERR "program ec : erase block OK.\n");
 
 	i = 0;
 	while(i < size){
@@ -649,31 +663,27 @@ static int ec_program_rom(struct ec_info *info)
 	ec_write(REG_XBISPICMD, SPICMD_WRITE_ENABLE);
 	if(rom_instruction_cycle(SPICMD_WRITE_ENABLE) == EC_STATE_BUSY){
 			printk(KERN_ERR "EC_PROGRAM_ROM : SPICMD_WRITE_ENABLE failed.\n");
-			ec_stop_spi();
-			return -EINVAL;
+			goto out1;
 	}
 	
 	/* protect the status register of rom */
 	ec_write(REG_XBISPICMD, SPICMD_READ_STATUS);
 	if(rom_instruction_cycle(SPICMD_READ_STATUS) == EC_STATE_BUSY){
 			printk(KERN_ERR "EC_PROGRAM_ROM : SPICMD_READ_STATUS failed.\n");
-			ec_stop_spi();
-			return -EINVAL;
+			goto out1;
 	}
 	status = ec_read(REG_XBISPIDAT);
 
 	ec_write(REG_XBISPIDAT, status | 0x1C);
 	if(ec_instruction_cycle() < 0){
 			printk(KERN_ERR "EC_PROGRAM_ROM : write status value failed.\n");
-			ec_stop_spi();
-			return -EINVAL;
+			goto out1;
 	}
 
 	ec_write(REG_XBISPICMD, SPICMD_WRITE_STATUS);
 	if(rom_instruction_cycle(SPICMD_WRITE_STATUS) == EC_STATE_BUSY){
 			printk(KERN_ERR "EC_PROGRAM_ROM : SPICMD_WRITE_STATUS failed.\n");
-			ec_stop_spi();
-			return -EINVAL;
+			goto out1;
 	}
 #endif
 
@@ -681,23 +691,30 @@ static int ec_program_rom(struct ec_info *info)
 	ec_write(REG_XBISPICMD, SPICMD_WRITE_DISABLE);
 	if(rom_instruction_cycle(SPICMD_WRITE_DISABLE) == EC_STATE_BUSY){
 			printk(KERN_ERR "EC_PROGRAM_ROM : SPICMD_WRITE_DISABLE failed.\n");
-			ec_stop_spi();
-			return -EINVAL;
+			goto out1;
 	}
 	
+out1:
 	/* we should stop spi access firstly */
 	ec_stop_spi();
-
+out:
 	/* for security */
 	for(j = 0; j < 2000; j++)
 		udelay(1000);
-	/* exit from the reset mode */
-	ec_exit_reset_mode();
-	/* for security */
-//	for(j = 0; j < 1000; j++)
-//		udelay(1000);
-	/* re-power the whole system */
-//	ec_reboot_system();
+
+	/* modify for program serial No, after program No exit idle mode and enable WDD */
+	if (flag == PROGRAM_FLAG_ROM) {
+		/* exit from the reset mode */
+		ec_exit_reset_mode();
+	} else {
+		/* ec exit from idle mode */
+		ret = ec_exit_idle_mode();
+		ec_enable_WDD();
+		if(ret < 0){
+			return ret;
+		}
+	}
+
 	return 0;
 }
 
@@ -709,8 +726,6 @@ static int misc_ioctl(struct inode * inode, struct file *filp, u_int cmd, u_long
 	void __user *ptr = (void __user *)arg;
 	struct ec_reg *ecreg = (struct ec_reg *)(filp->private_data);
 	int ret = 0;
-	int i;
-	u32 temp_size = 0;
 
 	switch (cmd) {
 		case IOCTL_RDREG :
@@ -760,48 +775,23 @@ static int misc_ioctl(struct inode * inode, struct file *filp, u_int cmd, u_long
 			}
 			break;
 		case IOCTL_PROGRAM_IE :
-			if(get_user( (ecinfo.start_addr), (u32 *)ptr) ){
-				printk(KERN_ERR "program ec : get user error.\n");
-				return -EFAULT;
-			}
-			if(get_user( (ecinfo.size), (u32 *)((u32 *)ptr + 1)) ){
-				printk(KERN_ERR "program ec : get user error.\n");
-				return -EFAULT;
-			}
-
-			if( (ecinfo.size + ecinfo.start_addr) > IE_CONTENT_MAX_SIZE ){
-				printk(KERN_ERR "program ie : size out of limited.\n");
-				return -EINVAL;
-			}
-			if( (ecinfo.size > EC_CONTENT_MAX_SIZE) 
-				|| (ecinfo.start_addr > EC_CONTENT_MAX_SIZE) ){
-				printk(KERN_ERR "program ie : size OR start_addr is out of 64KB, we only support with 64KB, too big...\n");
-				return -EINVAL;
-			}
-
-			if(ecinfo.size % PIECE_SIZE){
-				temp_size = ecinfo.size;
-				ecinfo.size = (ecinfo.size / PIECE_SIZE + 1) * PIECE_SIZE;
-			}
+			ecinfo.start_addr = EC_START_ADDR;
+			ecinfo.size = EC_CONTENT_MAX_SIZE;
 			ecinfo.buf = (u8 *)kmalloc(ecinfo.size, GFP_KERNEL);
 			if(ecinfo.buf == NULL){
 				printk(KERN_ERR "program ie : kmalloc failed.\n");
 				return -ENOMEM;
 			}
-			ret = copy_from_user(ecinfo.buf, ((u8 *)ptr + 8), ecinfo.size);
+			ret = copy_from_user(ecinfo.buf, (u8 *)ptr, ecinfo.size);
 			if(ret){
 				printk(KERN_ERR "program ie : copy from user error.\n");
 				kfree(ecinfo.buf);
 				ecinfo.buf = NULL;
 				return -EFAULT;
 			}
-		
-			/* fill the PIECE pad */	
-			for(i = temp_size; i < ecinfo.size; i++){
-				*(u8 *)((u8 *)ecinfo.buf + i) = 0xff;
-			}
-			
-			ec_program_piece(&ecinfo);
+
+			/* use ec_program_rom to write serial No */
+			ec_program_rom(&ecinfo, PROGRAM_FLAG_IE);
 			
 			kfree(ecinfo.buf);
 			ecinfo.buf = NULL;
@@ -829,8 +819,8 @@ static int misc_ioctl(struct inode * inode, struct file *filp, u_int cmd, u_long
 				return -EFAULT;
 			}
 	
-			ec_program_rom(&ecinfo);
-	
+			ec_program_rom(&ecinfo, PROGRAM_FLAG_ROM);
+
 			kfree(ecinfo.buf);
 			ecinfo.buf = NULL;
 			break;
