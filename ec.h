@@ -132,6 +132,9 @@
 #define	REG_CAMERA_STATUS			0xF46A	//camera is in ON/OFF status.
 #define	BIT_CAMERA_STATUS_ON			(1 << 0)
 #define	BIT_CAMERA_STATUS_OFF			(0 << 0)
+#define	REG_CAMERA_CONTROL			0xF7B7	//control camera to ON/OFF.
+#define	BIT_CAMERA_CONTROL_OFF			(1 << 1)
+#define	BIT_CAMERA_CONTROL_ON			(1 << 1)
 #define	REG_AUDIO_VOLUME			0xF46C	//The register to show volume level
 #define	FLAG_AUDIO_VOLUME_LEVEL_0		0
 #define	FLAG_AUDIO_VOLUME_LEVEL_1		1

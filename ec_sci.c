@@ -96,7 +96,7 @@ static struct file_operations sci_proc_fops = {
 	write : sci_proc_write,
 };
 
-#define	SCI_ACTION_COUNT	9	
+#define	SCI_ACTION_COUNT	11
 #define	SCI_ACTION_WIDTH	14
 char sci_action[SCI_ACTION_COUNT][SCI_ACTION_WIDTH] = {
 	"DISPLAY : LCD",
@@ -106,6 +106,8 @@ char sci_action[SCI_ACTION_COUNT][SCI_ACTION_WIDTH] = {
 	"AUDIO : CHG",
 	"MACHINE : OFF",
 	"MACHINE : RES",
+	"CAMERA : ON",
+	"CAMERA : OFF",
 	"NONE",
 	"NONE"
 };
@@ -118,6 +120,8 @@ static enum {
 	CMD_AUDIO_CHANGE_VOLUME,
 	CMD_MACHINE_OFF,
 	CMD_MACHINE_RESET,
+	CMD_CAMERA_ON,
+	CMD_CAMERA_OFF,
 	CMD_NONE
 }sci_cmd;
 
@@ -191,6 +195,14 @@ static void sci_display_change_brightness(void)
 static void sci_audio_change_volume(void)
 {
 	ec_write(REG_AUDIO_VOLUME, FLAG_AUDIO_VOLUME_LEVEL_5);
+	return;
+}
+
+static void sci_camera_on_off(void)
+{
+	unsigned char val;
+	val = ec_read(REG_CAMERA_CONTROL);
+	ec_write(REG_CAMERA_CONTROL, val | (1 << 1));
 	return;
 }
 
@@ -297,8 +309,9 @@ static ssize_t sci_proc_read(struct file *file, char *buf, size_t len, loff_t *p
 			(event[SCI_INDEX_AC_BAT] & 0x04) >> BIT_AC_BAT_INIT_CAP,	
 			(event[SCI_INDEX_AC_BAT] & 0x08) >> BIT_AC_BAT_CHARGE_MODE,	
 			(event[SCI_INDEX_AC_BAT] & 0x10) >> BIT_AC_BAT_STOP_CHARGE,	
-			(event[SCI_INDEX_AC_BAT] & 0x20) >> BIT_AC_BAT_BAT_LOW,	
-			(event[SCI_INDEX_AC_BAT] & 0x40) >> BIT_AC_BAT_BAT_FULL); 
+			(event[SCI_INDEX_AC_BAT] & 0x20) >> BIT_AC_BAT_BAT_LOW,
+			(event[SCI_INDEX_AC_BAT] & 0x40) >> BIT_AC_BAT_BAT_FULL);
+
 	count = strlen(proc_buf);
 	sci_device->irq_data = 0;
 
@@ -327,14 +340,16 @@ static ssize_t sci_proc_write(struct file *file, const char *buf, size_t len, lo
 		return -EFAULT;
 	proc_buf[len] = '\0';
 
+	PRINTK_DBG("proc_buf : %s\n", proc_buf);
 	for(i = 0; i < SCI_ACTION_COUNT; i++){
-		if(strncmp(proc_buf, sci_action[i], sizeof(sci_action[i]) - 1) == 0){
+		if(strncmp(proc_buf, sci_action[i], strlen(sci_action[i])) == 0){
 			sci_cmd = i;
 			break;
 		}
 	}
 	if(i == SCI_ACTION_COUNT)
 		sci_cmd = CMD_NONE;
+	PRINTK_DBG("sci_cmd: %d\n", sci_cmd);
 	switch(sci_cmd){
 		case	CMD_DISPLAY_LCD :
 			sci_display_lcd();
@@ -363,6 +378,14 @@ static ssize_t sci_proc_write(struct file *file, const char *buf, size_t len, lo
 		case	CMD_MACHINE_RESET :
 			sci_machine_reset();
 			PRINTK_DBG(KERN_DEBUG "CMD_MACHINE_RESET");
+			break;
+		case	CMD_CAMERA_ON :
+			sci_camera_on_off();
+			PRINTK_DBG(KERN_DEBUG "CMD_CAMERA_ON");
+			break;
+		case	CMD_CAMERA_OFF :
+			sci_camera_on_off();
+			PRINTK_DBG(KERN_DEBUG "CMD_CAMERA_OFF");
 			break;
 		default :
 			printk(KERN_ERR "EC SCI : Not supported cmd.\n");
@@ -436,6 +459,7 @@ static int sci_parse_num(struct sci_device *sci_device)
 	sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_INC] = 0;
 	sci_device->sci_num_array[SCI_INDEX_AUDIO_VOLUME_DEC] = 0;
 
+	sci_device->sci_num_array[SCI_INDEX_CAMERA] = 0x0;
 	sci_device->sci_num_array[SCI_INDEX_WLAN] = ec_read(REG_WLAN_STATUS);
 	sci_device->sci_num_array[SCI_INDEX_AUDIO_MUTE] = ec_read(REG_AUDIO_MUTE);
 	sci_device->sci_num_array[SCI_INDEX_BLACK_SCREEN] = ec_read(REG_DISPLAY_LCD);
@@ -462,7 +486,7 @@ static int sci_parse_num(struct sci_device *sci_device)
 			sci_device->sci_num_array[SCI_INDEX_CRT_DETECT] = ec_read(REG_CRT_DETECT);
 			break;
 		case	SCI_EVENT_NUM_CAMERA :
-			sci_device->sci_num_array[SCI_INDEX_CAMERA] = ec_read(REG_CAMERA_STATUS);
+			sci_device->sci_num_array[SCI_INDEX_CAMERA] = 0x1;
 			break;
 		case	SCI_EVENT_NUM_USB_OC2 :
 			sci_device->sci_num_array[SCI_INDEX_USB_OC2] = ec_read(REG_USB2_FLAG);
