@@ -463,6 +463,7 @@ static int sci_parse_num(struct sci_device *sci_device)
 	sci_device->sci_num_array[SCI_INDEX_WLAN] = ec_read(REG_WLAN_STATUS);
 	sci_device->sci_num_array[SCI_INDEX_AUDIO_MUTE] = ec_read(REG_AUDIO_MUTE);
 	sci_device->sci_num_array[SCI_INDEX_BLACK_SCREEN] = ec_read(REG_DISPLAY_LCD);
+	sci_device->sci_num_array[SCI_INDEX_CRT_DETECT] = ec_read(REG_CRT_DETECT);
 	if( ec_read(REG_BAT_POWER) & BIT_BAT_POWER_ACIN ){
 		sci_device->sci_num_array[SCI_INDEX_AC_BAT] |= 1 << BIT_AC_BAT_AC_IN;
 	}else{
