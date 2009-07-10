@@ -27,6 +27,7 @@
 #include <linux/kthread.h>
 #include <linux/delay.h>
 #include <linux/timer.h>
+//#include <linux/version.h>
 #include <asm/delay.h>
 #include "ec.h"
 #include "ec_misc_fn.h"
@@ -349,7 +350,10 @@ static int __init apm_init(void)
 		printk(KERN_ERR "EC BAT : register /proc/apm failed.\n");
 		return -EINVAL;
 	}
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,30)
 	bat_proc_entry->owner = THIS_MODULE;
+#endif
 	bat_proc_entry->read_proc = bat_proc_read;
 	bat_proc_entry->write_proc = NULL;
 	bat_proc_entry->data = NULL;

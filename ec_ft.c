@@ -174,7 +174,10 @@ static int __init ft_init(void)
 		printk(KERN_ERR "EC FT : register /proc/ft failed.\n");
 		return -EINVAL;
 	}
+
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,30)
 	ft_proc_entry->owner = THIS_MODULE;
+#endif
 	ft_proc_entry->read_proc = ft_proc_read;
 	ft_proc_entry->write_proc = NULL;
 	ft_proc_entry->data = NULL;

@@ -859,7 +859,9 @@ static int misc_release(struct inode * inode, struct file * filp)
 }
 
 static struct file_operations ecmisc_fops = {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,30)
 	.owner		= THIS_MODULE,
+#endif
 	.open		= misc_open,
 	.release	= misc_release,
 	.read		= NULL,

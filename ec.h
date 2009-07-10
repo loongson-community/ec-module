@@ -11,8 +11,9 @@
 #include	<asm/uaccess.h>
 #include	<asm/io.h>
 #include	<asm/system.h>
+#include 	<linux/version.h>
 
-#define VERSION		"1.37"
+#define VERSION		"1.38-pre1"
 
 /* 
  * The following registers are determined by the EC index configuration.
@@ -28,7 +29,7 @@
 #define	EC_MAX_REGADDR	0xFFFF
 #define	EC_MIN_REGADDR	0xF000
 //#define	EC_RAM_ADDR	0xF400
-#define	EC_RAM_ADDR	0xF800
+#define	EC_RAM_ADDR		0xF800
 
 /**********************************************************************/
 
@@ -153,6 +154,9 @@
 #define	REG_DISPLAY_LCD				0xF79F	//Black screen Status
 #define	BIT_DISPLAY_LCD_ON				(1 << 0)
 #define	BIT_DISPLAY_LCD_OFF				(0 << 0)
+#define	REG_BACKLIGHT_CTRL			0xF7BD	//LCD backlight control: off/restore
+#define	BIT_BACKLIGHT_ON				(1 << 0)
+#define	BIT_BACKLIGHT_OFF				(0 << 0)
 
 /***********************************************************/
 

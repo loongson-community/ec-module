@@ -27,12 +27,16 @@
 #include <linux/mtd/mtd.h>
 #include <linux/mtd/map.h>
 #include <linux/mtd/partitions.h>
+#include <linux/version.h>
 
 #define FLASH_PHYS_ADDR 0x1fc00000
 #define FLASH_SIZE 0x080000
 
 #define FLASH_PARTITION0_ADDR 0x00000000
 #define FLASH_PARTITION0_SIZE 0x00080000
+
+/* define kernel version number for support new kernel version */
+//#define KERNEL_VERSION	2.6.30
 
 struct map_info flash_map = {
 		.name =		"flash device",
@@ -70,7 +74,9 @@ int __init init_flash(void)
 
 	mymtd = do_map_probe("cfi_probe", &flash_map);
 	if (mymtd) {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,30)
 		mymtd->owner = THIS_MODULE;
+#endif
 		add_mtd_partitions(mymtd, flash_parts, PARTITION_COUNT);
 		printk(KERN_NOTICE "pmon flash device initialized\n");
 		return 0;

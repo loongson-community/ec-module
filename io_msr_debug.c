@@ -28,6 +28,7 @@
 #include <linux/kthread.h>
 #include <linux/delay.h>
 #include <linux/timer.h>
+#include <linux/version.h>
 
 #include <asm/delay.h>
 
@@ -46,6 +47,9 @@ struct io_msr_reg {
 /* ec io space range */
 #define IO_MAX_ADDR	0xBFD0FFFF
 #define IO_MIN_ADDR	0xBFD00000
+
+/* define kernel version number for support new kernel version */
+//#define KERNEL_VERSION	2.6.30
 
 extern void _rdmsr(u32 msr, u32 *hi, u32 *lo);
 extern void _wrmsr(u32 msr, u32 hi, u32 lo);
@@ -153,7 +157,9 @@ static int io_msr_release(struct inode * inode, struct file * filp)
 }
 
 static struct file_operations io_msr_fops = {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,30)
 	.owner		= THIS_MODULE,
+#endif
 	.open		= io_msr_open,
 	.release	= io_msr_release,
 	.read		= NULL,

@@ -90,13 +90,15 @@ static ssize_t sci_proc_write(struct file *file, const char *buf, size_t len, lo
 static unsigned int sci_poll(struct file *fp, poll_table *wait);
 static struct proc_dir_entry *sci_proc_entry;
 static struct file_operations sci_proc_fops = {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,30)
 	owner :	THIS_MODULE,
+#endif
 	read  : sci_proc_read,
 	poll  : sci_poll,
 	write : sci_proc_write,
 };
 
-#define	SCI_ACTION_COUNT	11
+#define	SCI_ACTION_COUNT	13
 #define	SCI_ACTION_WIDTH	14
 char sci_action[SCI_ACTION_COUNT][SCI_ACTION_WIDTH] = {
 	"DISPLAY : LCD",
@@ -108,6 +110,8 @@ char sci_action[SCI_ACTION_COUNT][SCI_ACTION_WIDTH] = {
 	"MACHINE : RES",
 	"CAMERA : ON",
 	"CAMERA : OFF",
+	"LCDLED : ON",
+	"LCDLED : OFF",
 	"NONE",
 	"NONE"
 };
@@ -122,6 +126,8 @@ static enum {
 	CMD_MACHINE_RESET,
 	CMD_CAMERA_ON,
 	CMD_CAMERA_OFF,
+	CMD_LCDLED_PWRON,
+	CMD_LCDLED_PWROFF,
 	CMD_NONE
 }sci_cmd;
 
@@ -185,6 +191,44 @@ static void sci_display_all(void)
 
 	return;
 }
+
+static void sci_lcdled_power(unsigned char flag)
+{
+	unsigned char value;
+	
+	/* default display crt */
+	outb(0x21, 0x3c4);
+	value = inb(0x3c5);
+	value &= ~(1 << 7);
+	outb(0x21, 0x3c4);
+	outb(value, 0x3c5);
+
+	if(flag == CMD_LCDLED_PWRON){
+		/* open lcd output */
+		outb(0x31, 0x3c4);
+		value = inb(0x3c5);
+		value = (value & 0xf8) | 0x03;
+		outb(0x31, 0x3c4);
+		outb(value, 0x3c5);
+
+		/* LCD backlight on */
+		ec_write(REG_BACKLIGHT_CTRL, BIT_BACKLIGHT_ON);
+	}
+	else if(flag == CMD_LCDLED_PWROFF){
+		/* close lcd output */
+		outb(0x31, 0x3c4);
+		value = inb(0x3c5);
+		value = (value & 0xf8) | 0x02;
+		outb(0x31, 0x3c4);
+		outb(value, 0x3c5);
+	
+		/* LCD backlight off */
+		ec_write(REG_BACKLIGHT_CTRL, BIT_BACKLIGHT_OFF);
+	}
+
+	return;
+}
+
 
 static void sci_display_change_brightness(void)
 {
@@ -387,6 +431,15 @@ static ssize_t sci_proc_write(struct file *file, const char *buf, size_t len, lo
 			sci_camera_on_off();
 			PRINTK_DBG(KERN_DEBUG "CMD_CAMERA_OFF");
 			break;
+		case	CMD_LCDLED_PWRON :
+			sci_lcdled_power(CMD_LCDLED_PWRON);
+			PRINTK_DBG(KERN_DEBUG "CMD_LCDLED_PWRON");
+			break;
+		case	CMD_LCDLED_PWROFF :
+			sci_lcdled_power(CMD_LCDLED_PWROFF);
+			PRINTK_DBG(KERN_DEBUG "CMD_LCDLED_PWROFF");
+			break;
+
 		default :
 			printk(KERN_ERR "EC SCI : Not supported cmd.\n");
 			return -EINVAL;
@@ -690,7 +743,9 @@ static long sci_compat_ioctl(struct file *file, unsigned int cmd, unsigned long 
 }
 
 static const struct file_operations sci_fops = {
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,30)
 	.owner		= THIS_MODULE,
+#endif
 #ifdef	CONFIG_64BIT
 	.compat_ioctl	= sci_compat_ioctl,
 #else
@@ -896,7 +951,9 @@ static int __init sci_init(void)
 		printk(KERN_ERR "EC SCI : register /proc/sci failed.\n");
 		return -EINVAL;
 	}
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,30)
 	sci_proc_entry->owner = THIS_MODULE;
+#endif
 	sci_proc_entry->proc_fops = &sci_proc_fops;
 #endif
 

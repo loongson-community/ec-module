@@ -1,5 +1,6 @@
 #KERNEL_VERSION	:= `uname -r`
-KERNEL_DIR	:= /home/software/liujl/linux-2.6.27.1-89inch
+#KERNEL_DIR	:= /home/software/liujl/linux-2.6.27.1-89inch
+KERNEL_DIR	:= /home/huangw/MyWorks/git-works/linux_2.6.27.1-lemote
 INSTALL_MOD_DIR	:= char/
 
 PWD		:= $(shell pwd)
