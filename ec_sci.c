@@ -98,7 +98,7 @@ static struct file_operations sci_proc_fops = {
 	write : sci_proc_write,
 };
 
-#define	SCI_ACTION_COUNT	13
+#define	SCI_ACTION_COUNT	17
 #define	SCI_ACTION_WIDTH	14
 char sci_action[SCI_ACTION_COUNT][SCI_ACTION_WIDTH] = {
 	"DISPLAY : LCD",
@@ -112,6 +112,10 @@ char sci_action[SCI_ACTION_COUNT][SCI_ACTION_WIDTH] = {
 	"CAMERA : OFF",
 	"LCDLED : ON",
 	"LCDLED : OFF",
+	"LCDBLK : ON",
+	"LCDBLK : OFF",
+	"LCDVGA : ON",
+	"LCDVGA : OFF",
 	"NONE",
 	"NONE"
 };
@@ -128,6 +132,10 @@ static enum {
 	CMD_CAMERA_OFF,
 	CMD_LCDLED_PWRON,
 	CMD_LCDLED_PWROFF,
+	CMD_LCDBLK_PWRON,
+	CMD_LCDBLK_PWROFF,
+	CMD_LCDVGA_PWRON,
+	CMD_LCDVGA_PWROFF,
 	CMD_NONE
 }sci_cmd;
 
@@ -197,20 +205,30 @@ static void sci_lcdled_power(unsigned char flag)
 	unsigned char value;
 	
 	/* default display crt */
+#if 0	
 	outb(0x21, 0x3c4);
 	value = inb(0x3c5);
 	value &= ~(1 << 7);
+	PRINTK_DBG("value : 0x%x\n", value);
 	outb(0x21, 0x3c4);
 	outb(value, 0x3c5);
+#else
+	outb(0x21, 0x3c4);
+	value = inb(0x3c5);
+	value |= (1 << 7);
+	PRINTK_DBG("value : 0x%x\n", value);
+	outb(0x21, 0x3c4);
+	outb(value, 0x3c5);
+#endif
 
 	if(flag == CMD_LCDLED_PWRON){
 		/* open lcd output */
 		outb(0x31, 0x3c4);
 		value = inb(0x3c5);
 		value = (value & 0xf8) | 0x03;
+		PRINTK_DBG("lcdled on, value : 0x%x\n", value);
 		outb(0x31, 0x3c4);
 		outb(value, 0x3c5);
-
 		/* LCD backlight on */
 		ec_write(REG_BACKLIGHT_CTRL, BIT_BACKLIGHT_ON);
 	}
@@ -219,16 +237,82 @@ static void sci_lcdled_power(unsigned char flag)
 		outb(0x31, 0x3c4);
 		value = inb(0x3c5);
 		value = (value & 0xf8) | 0x02;
+		PRINTK_DBG("lcdled off, value : 0x%x\n", value);
 		outb(0x31, 0x3c4);
 		outb(value, 0x3c5);
+		/* LCD backlight off */
+		ec_write(REG_BACKLIGHT_CTRL, BIT_BACKLIGHT_OFF);
+	}
+	else if(flag == CMD_LCDBLK_PWRON){
+		/* open lcd output */
+		outb(0x31, 0x3c4);
+		value = inb(0x3c5);
+		value = (value & 0xf8) | 0x01;
+		PRINTK_DBG("lcdblk on, value : 0x%x\n", value);
+		outb(0x31, 0x3c4);
+		outb(value, 0x3c5);
+	}
+	else if(flag == CMD_LCDBLK_PWROFF){
+		/* close lcd output */
+		outb(0x31, 0x3c4);
+		value = inb(0x3c5);
+		value = (value & 0xf8) | 0x02;
+		PRINTK_DBG("lcdblk off, value : 0x%x\n", value);
+		outb(0x31, 0x3c4);
+		outb(value, 0x3c5);
+	}
+
+	return;
+}
+
+static void sci_lcdvga_power(unsigned char flag)
+{
+	unsigned char value;
 	
+	if(flag == CMD_LCDVGA_PWRON){
+#if 0
+		/* open crt output */
+		outb(0x21, 0x3c4);
+		value = inb(0x3c5);
+		value &= ~(1 << 7);
+		PRINTK_DBG("value : 0x%x\n", value);
+		outb(0x21, 0x3c4);
+		outb(value, 0x3c5);
+#endif
+		/* open lcd output */
+		outb(0x31, 0x3c4);
+		value = inb(0x3c5);
+		value = (value & 0xf8) | 0x03;
+		PRINTK_DBG("lcdled on, value : 0x%x\n", value);
+		outb(0x31, 0x3c4);
+		outb(value, 0x3c5);
+
+		/* LCD backlight on */
+		ec_write(REG_BACKLIGHT_CTRL, BIT_BACKLIGHT_ON);
+	}
+	else if(flag == CMD_LCDVGA_PWROFF){
+		/* close crt output */
+		outb(0x21, 0x3c4);
+		value = inb(0x3c5);
+		value |= (1 << 7);
+		PRINTK_DBG("value : 0x%x\n", value);
+		outb(0x21, 0x3c4);
+		outb(value, 0x3c5);
+
+		/* close lcd output */
+		outb(0x31, 0x3c4);
+		value = inb(0x3c5);
+		value = (value & 0xf8) | 0x02;
+		PRINTK_DBG("lcdled off, value : 0x%x\n", value);
+		outb(0x31, 0x3c4);
+		outb(value, 0x3c5);
+
 		/* LCD backlight off */
 		ec_write(REG_BACKLIGHT_CTRL, BIT_BACKLIGHT_OFF);
 	}
 
 	return;
 }
-
 
 static void sci_display_change_brightness(void)
 {
@@ -335,6 +419,7 @@ static ssize_t sci_proc_read(struct file *file, char *buf, size_t len, loff_t *p
 	for(i = 0; i < SCI_MAX_EVENT_COUNT; i++){
 		event[i] = sci_device->sci_num_array[i];
 	}
+	PRINTK_DBG("debug..... sci_num_array[0] = %d, event[0] %d\n", sci_device->sci_num_array[0], event[0]);
 
 	ret = sprintf(proc_buf, 
 			"%s 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x "
@@ -367,6 +452,7 @@ static ssize_t sci_proc_read(struct file *file, char *buf, size_t len, loff_t *p
 	if(copy_to_user(buf, proc_buf, count))
 		return -EFAULT;
 	
+	PRINTK_DBG("debug2..... proc_buf %s\n", proc_buf);
 	return count;
 }
 
@@ -378,10 +464,14 @@ static ssize_t sci_proc_write(struct file *file, const char *buf, size_t len, lo
 {
 	int i;
 	
-	if(len > PROC_BUF_SIZE)
+	if(len > PROC_BUF_SIZE){
+		PRINTK_DBG("err: size too big\n");
 		return -ENOMEM;
-	if(copy_from_user(proc_buf, buf, len))
+	}
+	if(copy_from_user(proc_buf, buf, len)){
+		PRINTK_DBG("err: copy from user error\n");
 		return -EFAULT;
+	}
 	proc_buf[len] = '\0';
 
 	PRINTK_DBG("proc_buf : %s\n", proc_buf);
@@ -438,6 +528,22 @@ static ssize_t sci_proc_write(struct file *file, const char *buf, size_t len, lo
 		case	CMD_LCDLED_PWROFF :
 			sci_lcdled_power(CMD_LCDLED_PWROFF);
 			PRINTK_DBG(KERN_DEBUG "CMD_LCDLED_PWROFF");
+			break;
+		case	CMD_LCDBLK_PWRON :
+			sci_lcdled_power(CMD_LCDBLK_PWRON);
+			PRINTK_DBG(KERN_DEBUG "CMD_LCDBLK_PWRON");
+			break;
+		case	CMD_LCDBLK_PWROFF :
+			sci_lcdled_power(CMD_LCDBLK_PWROFF);
+			PRINTK_DBG(KERN_DEBUG "CMD_LCDBLK_PWROFF");
+			break;
+		case	CMD_LCDVGA_PWRON :
+			sci_lcdvga_power(CMD_LCDVGA_PWRON);
+			PRINTK_DBG(KERN_DEBUG "CMD_LCDVGA_PWRON");
+			break;
+		case	CMD_LCDVGA_PWROFF :
+			sci_lcdvga_power(CMD_LCDVGA_PWROFF);
+			PRINTK_DBG(KERN_DEBUG "CMD_LCDVGA_PWROFF");
 			break;
 
 		default :
@@ -517,6 +623,7 @@ static int sci_parse_num(struct sci_device *sci_device)
 	sci_device->sci_num_array[SCI_INDEX_AUDIO_MUTE] = ec_read(REG_AUDIO_MUTE);
 	sci_device->sci_num_array[SCI_INDEX_BLACK_SCREEN] = ec_read(REG_DISPLAY_LCD);
 	sci_device->sci_num_array[SCI_INDEX_CRT_DETECT] = ec_read(REG_CRT_DETECT);
+	sci_device->sci_num_array[SCI_INDEX_LID] = ec_read(REG_LID_DETECT);
 	if( ec_read(REG_BAT_POWER) & BIT_BAT_POWER_ACIN ){
 		sci_device->sci_num_array[SCI_INDEX_AC_BAT] |= 1 << BIT_AC_BAT_AC_IN;
 	}else{
@@ -642,6 +749,7 @@ static irqreturn_t sci_int_routine(int irq, void *dev_id)
 		PRINTK_DBG(KERN_ERR "EC SCI :spurious irq.\n");
 		return IRQ_NONE;
 	}
+	printk("liujl : debug entering int....\n");
 
 	/* query the event number */
 	ret = sci_query_event_num();
@@ -657,7 +765,7 @@ static irqreturn_t sci_int_routine(int irq, void *dev_id)
 	}
 	sci_device->sci_number = ret;
 	
-	PRINTK_DBG(KERN_INFO "sci_number :0x%x\n", sci_device->sci_number);
+	PRINTK_DBG(KERN_INFO "sci_number: 0x%x\n", sci_device->sci_number);
 
 	/* parse the event number and wake the queue */
 	if( (sci_device->sci_number != 0x00) 

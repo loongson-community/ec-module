@@ -112,7 +112,7 @@ int ec_query_seq(unsigned char cmd)
 		printk(KERN_ERR "EC QUERY SEQ : deadable error : timeout...\n");
 		ret = -EINVAL;
 	}else{
-		PRINTK_DBG(KERN_INFO "(%x/%d)ec issued command %d status : 0x%x\n", timeout, EC_CMD_TIMEOUT - timeout, cmd, status);
+		PRINTK_DBG(KERN_INFO "(%x/%d)ec issued command %x status : 0x%x\n", timeout, EC_CMD_TIMEOUT - timeout, cmd, status);
 	}
 
 	spin_unlock_irqrestore(&port_access_lock, flags);

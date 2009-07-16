@@ -13,7 +13,7 @@
 #include	<asm/system.h>
 #include 	<linux/version.h>
 
-#define VERSION		"1.38-pre1"
+#define VERSION		"1.38t_lcdvga"
 
 /* 
  * The following registers are determined by the EC index configuration.
@@ -106,8 +106,8 @@
 #define	BIT_CRT_DETECT_PLUG				(1 << 0)
 #define	BIT_CRT_DETECT_UNPLUG			(0 << 0)
 #define	REG_LID_DETECT				0xF4BD	// detected LID is on or not
-#define	BIT_LID_DETECT_ON				(1 << 0)
-#define	BIT_LID_DETECT_OFF				(0 << 0)
+#define	BIT_LID_DETECT_ON				(1 << 0)	// 1:LID open (availability)
+#define	BIT_LID_DETECT_OFF				(0 << 0)	// 0:LID close(invalidation)
 #define	REG_RESET					0xF4EC	// reset the machine auto-clear : rd/wr
 #define	BIT_RESET_ON					(1 << 0)
 #define	BIT_RESET_OFF					(0 << 0)
@@ -214,7 +214,7 @@
 #define	CMD_PROGRAM_PIECE	0xda
 
 /**********************************************************************/
-//#define	DEBUG_PRINTK
+#define	DEBUG_PRINTK
 
 #ifdef DEBUG_PRINTK
 #define PRINTK_DBG(args...)	printk(args)
