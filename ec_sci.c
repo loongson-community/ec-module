@@ -98,7 +98,7 @@ static struct file_operations sci_proc_fops = {
 	write : sci_proc_write,
 };
 
-#define	SCI_ACTION_COUNT	17
+#define	SCI_ACTION_COUNT	15
 #define	SCI_ACTION_WIDTH	14
 char sci_action[SCI_ACTION_COUNT][SCI_ACTION_WIDTH] = {
 	"DISPLAY : LCD",
@@ -110,12 +110,12 @@ char sci_action[SCI_ACTION_COUNT][SCI_ACTION_WIDTH] = {
 	"MACHINE : RES",
 	"CAMERA : ON",
 	"CAMERA : OFF",
-	"LCDLED : ON",
-	"LCDLED : OFF",
-	"LCDBLK : ON",
-	"LCDBLK : OFF",
-	"LCDVGA : ON",
-	"LCDVGA : OFF",
+	"LCD : ON",
+	"LCD : OFF",
+	//"LED : ON",
+	//"LED : OFF",
+	"VGA : ON",
+	"VGA : OFF",
 	"NONE",
 	"NONE"
 };
@@ -130,12 +130,12 @@ static enum {
 	CMD_MACHINE_RESET,
 	CMD_CAMERA_ON,
 	CMD_CAMERA_OFF,
-	CMD_LCDLED_PWRON,
-	CMD_LCDLED_PWROFF,
-	CMD_LCDBLK_PWRON,
-	CMD_LCDBLK_PWROFF,
-	CMD_LCDVGA_PWRON,
-	CMD_LCDVGA_PWROFF,
+	CMD_LCD_PWRON,
+	CMD_LCD_PWROFF,
+	//CMD_LED_PWRON,
+	//CMD_LED_PWROFF,
+	CMD_VGA_PWRON,
+	CMD_VGA_PWROFF,
 	CMD_NONE
 }sci_cmd;
 
@@ -200,115 +200,64 @@ static void sci_display_all(void)
 	return;
 }
 
-static void sci_lcdled_power(unsigned char flag)
+#if 0
+static void sci_led_power(unsigned char flag)
 {
-	unsigned char value;
-	
-	/* default display crt */
-#if 0	
-	outb(0x21, 0x3c4);
-	value = inb(0x3c5);
-	value &= ~(1 << 7);
-	PRINTK_DBG("value : 0x%x\n", value);
-	outb(0x21, 0x3c4);
-	outb(value, 0x3c5);
-#else
-	outb(0x21, 0x3c4);
-	value = inb(0x3c5);
-	value |= (1 << 7);
-	PRINTK_DBG("value : 0x%x\n", value);
-	outb(0x21, 0x3c4);
-	outb(value, 0x3c5);
-#endif
 
-	if(flag == CMD_LCDLED_PWRON){
-		/* open lcd output */
-		outb(0x31, 0x3c4);
-		value = inb(0x3c5);
-		value = (value & 0xf8) | 0x03;
-		PRINTK_DBG("lcdled on, value : 0x%x\n", value);
-		outb(0x31, 0x3c4);
-		outb(value, 0x3c5);
+	if(flag == CMD_LED_PWRON){
 		/* LCD backlight on */
 		ec_write(REG_BACKLIGHT_CTRL, BIT_BACKLIGHT_ON);
 	}
-	else if(flag == CMD_LCDLED_PWROFF){
-		/* close lcd output */
-		outb(0x31, 0x3c4);
-		value = inb(0x3c5);
-		value = (value & 0xf8) | 0x02;
-		PRINTK_DBG("lcdled off, value : 0x%x\n", value);
-		outb(0x31, 0x3c4);
-		outb(value, 0x3c5);
+	else if(flag == CMD_LED_PWROFF){
 		/* LCD backlight off */
 		ec_write(REG_BACKLIGHT_CTRL, BIT_BACKLIGHT_OFF);
 	}
-	else if(flag == CMD_LCDBLK_PWRON){
-		/* open lcd output */
-		outb(0x31, 0x3c4);
+}
+#endif
+
+static void sci_vga_power(unsigned char flag)
+{
+	unsigned char value;
+	
+	if(flag == CMD_VGA_PWRON){
+		/* display crt */
+		outb(0x21, 0x3c4);
 		value = inb(0x3c5);
-		value = (value & 0xf8) | 0x01;
-		PRINTK_DBG("lcdblk on, value : 0x%x\n", value);
-		outb(0x31, 0x3c4);
+		value &= ~(1 << 7);
+		outb(0x21, 0x3c4);
 		outb(value, 0x3c5);
 	}
-	else if(flag == CMD_LCDBLK_PWROFF){
-		/* close lcd output */
-		outb(0x31, 0x3c4);
+	else if(flag == CMD_VGA_PWROFF){
+		/* close crt */
+		outb(0x21, 0x3c4);
 		value = inb(0x3c5);
-		value = (value & 0xf8) | 0x02;
-		PRINTK_DBG("lcdblk off, value : 0x%x\n", value);
-		outb(0x31, 0x3c4);
+		value |= (1 << 7);
+		outb(0x21, 0x3c4);
 		outb(value, 0x3c5);
 	}
 
 	return;
 }
 
-static void sci_lcdvga_power(unsigned char flag)
+static void sci_lcd_power(unsigned char flag)
 {
 	unsigned char value;
-	
-	if(flag == CMD_LCDVGA_PWRON){
-#if 0
-		/* open crt output */
-		outb(0x21, 0x3c4);
-		value = inb(0x3c5);
-		value &= ~(1 << 7);
-		PRINTK_DBG("value : 0x%x\n", value);
-		outb(0x21, 0x3c4);
-		outb(value, 0x3c5);
-#endif
+
+	if(flag == CMD_LCD_PWRON){
 		/* open lcd output */
 		outb(0x31, 0x3c4);
 		value = inb(0x3c5);
 		value = (value & 0xf8) | 0x03;
-		PRINTK_DBG("lcdled on, value : 0x%x\n", value);
 		outb(0x31, 0x3c4);
 		outb(value, 0x3c5);
-
-		/* LCD backlight on */
-		ec_write(REG_BACKLIGHT_CTRL, BIT_BACKLIGHT_ON);
 	}
-	else if(flag == CMD_LCDVGA_PWROFF){
-		/* close crt output */
-		outb(0x21, 0x3c4);
-		value = inb(0x3c5);
-		value |= (1 << 7);
-		PRINTK_DBG("value : 0x%x\n", value);
-		outb(0x21, 0x3c4);
-		outb(value, 0x3c5);
-
+	else if(flag == CMD_LCD_PWROFF){
 		/* close lcd output */
 		outb(0x31, 0x3c4);
 		value = inb(0x3c5);
 		value = (value & 0xf8) | 0x02;
-		PRINTK_DBG("lcdled off, value : 0x%x\n", value);
 		outb(0x31, 0x3c4);
 		outb(value, 0x3c5);
-
-		/* LCD backlight off */
-		ec_write(REG_BACKLIGHT_CTRL, BIT_BACKLIGHT_OFF);
 	}
 
 	return;
@@ -521,29 +470,29 @@ static ssize_t sci_proc_write(struct file *file, const char *buf, size_t len, lo
 			sci_camera_on_off();
 			PRINTK_DBG(KERN_DEBUG "CMD_CAMERA_OFF");
 			break;
-		case	CMD_LCDLED_PWRON :
-			sci_lcdled_power(CMD_LCDLED_PWRON);
-			PRINTK_DBG(KERN_DEBUG "CMD_LCDLED_PWRON");
+		case	CMD_LCD_PWRON :
+			sci_lcd_power(CMD_LCD_PWRON);
+			PRINTK_DBG(KERN_DEBUG "CMD_LCD_PWRON");
 			break;
-		case	CMD_LCDLED_PWROFF :
-			sci_lcdled_power(CMD_LCDLED_PWROFF);
-			PRINTK_DBG(KERN_DEBUG "CMD_LCDLED_PWROFF");
+		case	CMD_LCD_PWROFF :
+			sci_lcd_power(CMD_LCD_PWROFF);
+			PRINTK_DBG(KERN_DEBUG "CMD_LCD_PWROFF");
 			break;
-		case	CMD_LCDBLK_PWRON :
-			sci_lcdled_power(CMD_LCDBLK_PWRON);
-			PRINTK_DBG(KERN_DEBUG "CMD_LCDBLK_PWRON");
+		/*case	CMD_LED_PWRON :
+			sci_led_power(CMD_LED_PWRON);
+			PRINTK_DBG(KERN_DEBUG "CMD_LED_PWRON");
 			break;
-		case	CMD_LCDBLK_PWROFF :
-			sci_lcdled_power(CMD_LCDBLK_PWROFF);
-			PRINTK_DBG(KERN_DEBUG "CMD_LCDBLK_PWROFF");
+		case	CMD_LED_PWROFF :
+			sci_led_power(CMD_LED_PWROFF);
+			PRINTK_DBG(KERN_DEBUG "CMD_LED_PWROFF");
+			break;*/
+		case	CMD_VGA_PWRON :
+			sci_vga_power(CMD_VGA_PWRON);
+			PRINTK_DBG(KERN_DEBUG "CMD_VGA_PWRON");
 			break;
-		case	CMD_LCDVGA_PWRON :
-			sci_lcdvga_power(CMD_LCDVGA_PWRON);
-			PRINTK_DBG(KERN_DEBUG "CMD_LCDVGA_PWRON");
-			break;
-		case	CMD_LCDVGA_PWROFF :
-			sci_lcdvga_power(CMD_LCDVGA_PWROFF);
-			PRINTK_DBG(KERN_DEBUG "CMD_LCDVGA_PWROFF");
+		case	CMD_VGA_PWROFF :
+			sci_vga_power(CMD_VGA_PWROFF);
+			PRINTK_DBG(KERN_DEBUG "CMD_VGA_PWROFF");
 			break;
 
 		default :
