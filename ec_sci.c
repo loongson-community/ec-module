@@ -32,6 +32,7 @@
 #include <linux/mutex.h>
 #include <linux/wait.h>
 #include <linux/spinlock.h>
+#include <linux/kernel.h>
 #include <asm/delay.h>
 #include "ec.h"
 #include "ec_misc_fn.h"
@@ -98,8 +99,8 @@ static struct file_operations sci_proc_fops = {
 	write : sci_proc_write,
 };
 
-#define	SCI_ACTION_COUNT	15
-#define	SCI_ACTION_WIDTH	14
+#define	SCI_ACTION_COUNT	21
+#define	SCI_ACTION_WIDTH	20
 char sci_action[SCI_ACTION_COUNT][SCI_ACTION_WIDTH] = {
 	"DISPLAY : LCD",
 	"DISPLAY : CRT",
@@ -112,10 +113,14 @@ char sci_action[SCI_ACTION_COUNT][SCI_ACTION_WIDTH] = {
 	"CAMERA : OFF",
 	"LCD : ON",
 	"LCD : OFF",
-	//"LED : ON",
-	//"LED : OFF",
+	"LED : ON",
+	"LED : OFF",
 	"VGA : ON",
 	"VGA : OFF",
+	"BKLIGHT : UP",
+	"BKLIGHT : DOWN",
+	"AC : IN",
+	"AC : OUT",
 	"NONE",
 	"NONE"
 };
@@ -132,10 +137,14 @@ static enum {
 	CMD_CAMERA_OFF,
 	CMD_LCD_PWRON,
 	CMD_LCD_PWROFF,
-	//CMD_LED_PWRON,
-	//CMD_LED_PWROFF,
+	CMD_LED_PWRON,
+	CMD_LED_PWROFF,
 	CMD_VGA_PWRON,
 	CMD_VGA_PWROFF,
+	CMD_BKLIGHT_UP,
+	CMD_BKLIGHT_DOWN,
+	CMD_AC_IN,
+	CMD_AC_OUT,
 	CMD_NONE
 }sci_cmd;
 
@@ -200,7 +209,7 @@ static void sci_display_all(void)
 	return;
 }
 
-#if 0
+#if 1
 static void sci_led_power(unsigned char flag)
 {
 
@@ -258,6 +267,68 @@ static void sci_lcd_power(unsigned char flag)
 		value = (value & 0xf8) | 0x02;
 		outb(0x31, 0x3c4);
 		outb(value, 0x3c5);
+	}
+
+	return;
+}
+
+static void brightness_level_control(unsigned char level)
+{
+	ec_write(REG_DISPLAY_BRIGHTNESS, level);
+	PRINTK_DBG("Current brightness level : 0x%x\n", level);
+
+	return;
+}
+
+static void sci_brightness_write(unsigned char flag)
+{
+	unsigned char level;
+	unsigned char level_max;
+	unsigned char level_min;
+
+	level = ec_read(REG_DISPLAY_BRIGHTNESS);
+
+	if(ec_read(REG_BAT_POWER) & BIT_BAT_POWER_ACIN){
+		PRINTK_DBG("AC inserted...\n");
+		if(level == FLAG_DISPLAY_BRIGHTNESS_LEVEL_0)
+			level = FLAG_DISPLAY_BRIGHTNESS_LEVEL_1;
+		level_max = FLAG_DISPLAY_BRIGHTNESS_LEVEL_8;
+		level_min = FLAG_DISPLAY_BRIGHTNESS_LEVEL_1;
+	}
+	else{
+		PRINTK_DBG("AC no exist...\n");
+		if(level == FLAG_DISPLAY_BRIGHTNESS_LEVEL_8)
+			level = FLAG_DISPLAY_BRIGHTNESS_LEVEL_7;
+		level_max = FLAG_DISPLAY_BRIGHTNESS_LEVEL_7;
+		level_min = FLAG_DISPLAY_BRIGHTNESS_LEVEL_0;
+	}
+	if(flag == CMD_BKLIGHT_UP){
+		if(level < level_max && level >= level_min)
+			ec_write(REG_DISPLAY_BRIGHTNESS, ++level);
+		PRINTK_DBG("Brightness status(UP): 0x%x\n", ec_read(REG_DISPLAY_BRIGHTNESS));
+	}
+	else if(flag == CMD_BKLIGHT_DOWN){
+		if(level <= level_max && level > level_min)
+			ec_write(REG_DISPLAY_BRIGHTNESS, --level);
+		PRINTK_DBG("Brightness status(DOWN): 0x%x\n", ec_read(REG_DISPLAY_BRIGHTNESS));
+	}
+
+	return;
+}
+
+static void sci_ac_in_out(unsigned char flag)
+{
+	if(flag == CMD_AC_IN){
+		if(ec_read(REG_DISPLAY_BRIGHTNESS) < FLAG_DISPLAY_BRIGHTNESS_LEVEL_8){
+			PRINTK_DBG("ACIN...\n");
+			ec_write(REG_DISPLAY_BRIGHTNESS, ec_read(REG_DISPLAY_BRIGHTNESS) + 1);
+		}
+	}
+	else if(flag == CMD_AC_OUT){
+		if(ec_read(REG_DISPLAY_BRIGHTNESS) > FLAG_DISPLAY_BRIGHTNESS_LEVEL_0){
+			PRINTK_DBG("ACOUT...\n");
+			ec_write(REG_DISPLAY_BRIGHTNESS, ec_read(REG_DISPLAY_BRIGHTNESS) - 1);
+		}
 	}
 
 	return;
@@ -412,6 +483,7 @@ static ssize_t sci_proc_read(struct file *file, char *buf, size_t len, loff_t *p
 static ssize_t sci_proc_write(struct file *file, const char *buf, size_t len, loff_t *ppos)
 {
 	int i;
+	int level;
 	
 	if(len > PROC_BUF_SIZE){
 		PRINTK_DBG("err: size too big\n");
@@ -424,10 +496,24 @@ static ssize_t sci_proc_write(struct file *file, const char *buf, size_t len, lo
 	proc_buf[len] = '\0';
 
 	PRINTK_DBG("proc_buf : %s\n", proc_buf);
-	for(i = 0; i < SCI_ACTION_COUNT; i++){
+	for(i = 0; i < SCI_ACTION_COUNT; ++i){
 		if(strncmp(proc_buf, sci_action[i], strlen(sci_action[i])) == 0){
+			PRINTK_DBG(KERN_DEBUG "sci_action[%d] : %s\n", i, sci_action[i]);
 			sci_cmd = i;
 			break;
+		}
+		PRINTK_DBG("i = %d\n", i);
+		if(i >= SCI_ACTION_COUNT - 1){
+			/* To provide for the application layer interface, 
+			 * randomized controlled backlight brightness. 
+			 * huangwei 2009-07-23
+			 */
+			level = simple_strtol(proc_buf, NULL, 16);
+			if( level >= 0x0 && level <= 0x8 ){
+				brightness_level_control(level);
+				PRINTK_DBG(KERN_DEBUG "CMD_BRIGHTNESS_LEVEL\n");
+				return len;
+			}
 		}
 	}
 	if(i == SCI_ACTION_COUNT)
@@ -478,14 +564,14 @@ static ssize_t sci_proc_write(struct file *file, const char *buf, size_t len, lo
 			sci_lcd_power(CMD_LCD_PWROFF);
 			PRINTK_DBG(KERN_DEBUG "CMD_LCD_PWROFF");
 			break;
-		/*case	CMD_LED_PWRON :
+		case	CMD_LED_PWRON :
 			sci_led_power(CMD_LED_PWRON);
 			PRINTK_DBG(KERN_DEBUG "CMD_LED_PWRON");
 			break;
 		case	CMD_LED_PWROFF :
 			sci_led_power(CMD_LED_PWROFF);
 			PRINTK_DBG(KERN_DEBUG "CMD_LED_PWROFF");
-			break;*/
+			break;
 		case	CMD_VGA_PWRON :
 			sci_vga_power(CMD_VGA_PWRON);
 			PRINTK_DBG(KERN_DEBUG "CMD_VGA_PWRON");
@@ -494,11 +580,29 @@ static ssize_t sci_proc_write(struct file *file, const char *buf, size_t len, lo
 			sci_vga_power(CMD_VGA_PWROFF);
 			PRINTK_DBG(KERN_DEBUG "CMD_VGA_PWROFF");
 			break;
+		case	CMD_BKLIGHT_UP :
+			sci_brightness_write(CMD_BKLIGHT_UP);
+			PRINTK_DBG(KERN_DEBUG "CMD_BKLIGHT_UP");
+			break;
+		case	CMD_BKLIGHT_DOWN :
+			PRINTK_DBG(KERN_DEBUG "CMD_BKLIGHT_DOWN: %d\n", CMD_BKLIGHT_DOWN);
+			sci_brightness_write(CMD_BKLIGHT_DOWN);
+			PRINTK_DBG(KERN_DEBUG "CMD_BKLIGHT_DOWN");
+			break;
+		case	CMD_AC_IN :
+			sci_ac_in_out(CMD_AC_IN);
+			PRINTK_DBG(KERN_DEBUG "CMD_AC_IN");
+			break;
+		case	CMD_AC_OUT :
+			sci_ac_in_out(CMD_AC_OUT);
+			PRINTK_DBG(KERN_DEBUG "CMD_AC_OUT");
+			break;
 
 		default :
 			printk(KERN_ERR "EC SCI : Not supported cmd.\n");
 			return -EINVAL;
 	}
+	PRINTK_DBG(KERN_DEBUG "\n");
 	
 	return len;
 }
@@ -698,7 +802,7 @@ static irqreturn_t sci_int_routine(int irq, void *dev_id)
 		PRINTK_DBG(KERN_ERR "EC SCI :spurious irq.\n");
 		return IRQ_NONE;
 	}
-	printk("liujl : debug entering int....\n");
+	PRINTK_DBG("liujl : debug entering int....\n");
 
 	/* query the event number */
 	ret = sci_query_event_num();

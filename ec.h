@@ -13,7 +13,7 @@
 #include	<asm/system.h>
 #include 	<linux/version.h>
 
-#define VERSION		"1.38t1_lid"
+#define VERSION		"1.38t2_brgctrl"
 
 /* 
  * The following registers are determined by the EC index configuration.
