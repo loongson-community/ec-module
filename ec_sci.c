@@ -32,7 +32,6 @@
 #include <linux/mutex.h>
 #include <linux/wait.h>
 #include <linux/spinlock.h>
-#include <linux/kernel.h>
 #include <asm/delay.h>
 #include "ec.h"
 #include "ec_misc_fn.h"
@@ -289,7 +288,7 @@ static void sci_brightness_write(unsigned char flag)
 	level = ec_read(REG_DISPLAY_BRIGHTNESS);
 
 	if(ec_read(REG_BAT_POWER) & BIT_BAT_POWER_ACIN){
-		PRINTK_DBG("AC inserted...\n");
+		PRINTK_DBG("AC exist...\n");
 		if(level == FLAG_DISPLAY_BRIGHTNESS_LEVEL_0)
 			level = FLAG_DISPLAY_BRIGHTNESS_LEVEL_1;
 		level_max = FLAG_DISPLAY_BRIGHTNESS_LEVEL_8;
@@ -377,7 +376,6 @@ static void sci_machine_reset(void)
 }
 
 /*******************************************************************/
-//static const char driver_version[] = "1.0";
 static const char driver_version[] = VERSION;
 
 #ifdef CONFIG_PROC_FS
@@ -388,7 +386,7 @@ unsigned char proc_buf[PROC_BUF_SIZE];
  * sci_proc_read :
  *	read information from sci device and suppied to upper layer
  *	The format is as following :
- *	driver_version		1.0
+ *	driver_version		VERSION
  *	DISPLAY BRIGHTNESS INCREASE
  *	DISPLAY BRIGHTNESS DECREASE
  *	AUDIO VOLUME INCREASE
@@ -522,87 +520,86 @@ static ssize_t sci_proc_write(struct file *file, const char *buf, size_t len, lo
 	switch(sci_cmd){
 		case	CMD_DISPLAY_LCD :
 			sci_display_lcd();
-			PRINTK_DBG(KERN_DEBUG "CMD_DISPLAY_LCD");
+			PRINTK_DBG(KERN_DEBUG "CMD_DISPLAY_LCD\n");
 			break;
 		case	CMD_DISPLAY_CRT :
 			sci_display_crt();
-			PRINTK_DBG(KERN_DEBUG "CMD_DISPLAY_CRT");
+			PRINTK_DBG(KERN_DEBUG "CMD_DISPLAY_CRT\n");
 			break;
 		case	CMD_DISPLAY_ALL :
 			sci_display_all();
-			PRINTK_DBG(KERN_DEBUG "CMD_DISPLAY_ALL");
+			PRINTK_DBG(KERN_DEBUG "CMD_DISPLAY_ALL\n");
 			break;
 		case	CMD_DISPLAY_CHANGE_BRIGHTNESS :
 			sci_display_change_brightness();
-			PRINTK_DBG(KERN_DEBUG "CMD_DISPLAY_CHANGE_BRIGHTNESS");
+			PRINTK_DBG(KERN_DEBUG "CMD_DISPLAY_CHANGE_BRIGHTNESS\n");
 			break;
 		case	CMD_AUDIO_CHANGE_VOLUME :
 			sci_audio_change_volume();
-			PRINTK_DBG(KERN_DEBUG "CMD_AUDIO_CHANGE_VOLUME");
+			PRINTK_DBG(KERN_DEBUG "CMD_AUDIO_CHANGE_VOLUME\n");
 			break;
 		case	CMD_MACHINE_OFF :
 			sci_machine_off();
-			PRINTK_DBG(KERN_DEBUG "CMD_MACHINE_OFF");
+			PRINTK_DBG(KERN_DEBUG "CMD_MACHINE_OFF\n");
 			break;
 		case	CMD_MACHINE_RESET :
 			sci_machine_reset();
-			PRINTK_DBG(KERN_DEBUG "CMD_MACHINE_RESET");
+			PRINTK_DBG(KERN_DEBUG "CMD_MACHINE_RESET\n");
 			break;
 		case	CMD_CAMERA_ON :
 			sci_camera_on_off();
-			PRINTK_DBG(KERN_DEBUG "CMD_CAMERA_ON");
+			PRINTK_DBG(KERN_DEBUG "CMD_CAMERA_ON\n");
 			break;
 		case	CMD_CAMERA_OFF :
 			sci_camera_on_off();
-			PRINTK_DBG(KERN_DEBUG "CMD_CAMERA_OFF");
+			PRINTK_DBG(KERN_DEBUG "CMD_CAMERA_OFF\n");
 			break;
 		case	CMD_LCD_PWRON :
 			sci_lcd_power(CMD_LCD_PWRON);
-			PRINTK_DBG(KERN_DEBUG "CMD_LCD_PWRON");
+			PRINTK_DBG(KERN_DEBUG "CMD_LCD_PWRON\n");
 			break;
 		case	CMD_LCD_PWROFF :
 			sci_lcd_power(CMD_LCD_PWROFF);
-			PRINTK_DBG(KERN_DEBUG "CMD_LCD_PWROFF");
+			PRINTK_DBG(KERN_DEBUG "CMD_LCD_PWROFF\n");
 			break;
 		case	CMD_LED_PWRON :
 			sci_led_power(CMD_LED_PWRON);
-			PRINTK_DBG(KERN_DEBUG "CMD_LED_PWRON");
+			PRINTK_DBG(KERN_DEBUG "CMD_LED_PWRON\n");
 			break;
 		case	CMD_LED_PWROFF :
 			sci_led_power(CMD_LED_PWROFF);
-			PRINTK_DBG(KERN_DEBUG "CMD_LED_PWROFF");
+			PRINTK_DBG(KERN_DEBUG "CMD_LED_PWROFF\n");
 			break;
 		case	CMD_VGA_PWRON :
 			sci_vga_power(CMD_VGA_PWRON);
-			PRINTK_DBG(KERN_DEBUG "CMD_VGA_PWRON");
+			PRINTK_DBG(KERN_DEBUG "CMD_VGA_PWRON\n");
 			break;
 		case	CMD_VGA_PWROFF :
 			sci_vga_power(CMD_VGA_PWROFF);
-			PRINTK_DBG(KERN_DEBUG "CMD_VGA_PWROFF");
+			PRINTK_DBG(KERN_DEBUG "CMD_VGA_PWROFF\n");
 			break;
 		case	CMD_BKLIGHT_UP :
 			sci_brightness_write(CMD_BKLIGHT_UP);
-			PRINTK_DBG(KERN_DEBUG "CMD_BKLIGHT_UP");
+			PRINTK_DBG(KERN_DEBUG "CMD_BKLIGHT_UP\n");
 			break;
 		case	CMD_BKLIGHT_DOWN :
 			PRINTK_DBG(KERN_DEBUG "CMD_BKLIGHT_DOWN: %d\n", CMD_BKLIGHT_DOWN);
 			sci_brightness_write(CMD_BKLIGHT_DOWN);
-			PRINTK_DBG(KERN_DEBUG "CMD_BKLIGHT_DOWN");
+			PRINTK_DBG(KERN_DEBUG "CMD_BKLIGHT_DOWN\n");
 			break;
 		case	CMD_AC_IN :
 			sci_ac_in_out(CMD_AC_IN);
-			PRINTK_DBG(KERN_DEBUG "CMD_AC_IN");
+			PRINTK_DBG(KERN_DEBUG "CMD_AC_IN\n");
 			break;
 		case	CMD_AC_OUT :
 			sci_ac_in_out(CMD_AC_OUT);
-			PRINTK_DBG(KERN_DEBUG "CMD_AC_OUT");
+			PRINTK_DBG(KERN_DEBUG "CMD_AC_OUT\n");
 			break;
 
 		default :
 			printk(KERN_ERR "EC SCI : Not supported cmd.\n");
 			return -EINVAL;
 	}
-	PRINTK_DBG(KERN_DEBUG "\n");
 	
 	return len;
 }

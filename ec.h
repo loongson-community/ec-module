@@ -13,7 +13,7 @@
 #include	<asm/system.h>
 #include 	<linux/version.h>
 
-#define VERSION		"1.38t2_brgctrl"
+#define VERSION		"1.38t3_brightness"
 
 /* 
  * The following registers are determined by the EC index configuration.
@@ -214,7 +214,7 @@
 #define	CMD_PROGRAM_PIECE	0xda
 
 /**********************************************************************/
-#define	DEBUG_PRINTK
+//#define	DEBUG_PRINTK
 
 #ifdef DEBUG_PRINTK
 #define PRINTK_DBG(args...)	printk(args)
