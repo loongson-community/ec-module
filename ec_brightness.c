@@ -3,18 +3,20 @@
  * Author	: huangw <huangw@lemote.com>
  * Date		: 2009-07-24
  *
- * NOTE : For the application layer to read the current value(level) of backlight brightness
- *        to provide interface
- *        Usage: cat /proc/brightness
+ * NOTE : Provide interface for the application layer,
+ *        read the current value (level) of backlight brightness from /proc/brightness,
+ * 		  and write backlight brightness level to /proc/brightness to control brightness.
+ *        
+ *        Usage: 
+ *	        read : cat /proc/brightness
+ *	        write: echo 4 > /proc/brightness
  */
 
 /**********************************************************/
 
 #include <linux/module.h>
-//#include <linux/poll.h>
 #include <linux/proc_fs.h>
 #include <linux/miscdevice.h>
-//#include <linux/capability.h>
 #include <linux/sched.h>
 #include <linux/device.h>
 #include <linux/kernel.h>
@@ -25,6 +27,7 @@
 #include <linux/delay.h>
 #include <linux/timer.h>
 #include <asm/delay.h>
+
 #include "ec.h"
 #include "ec_misc_fn.h"
 /************************************************************************/
@@ -49,8 +52,20 @@ static struct miscdevice brg_device = {
 	.fops		= NULL
 };
 
+static void brightness_level_control(unsigned char level)
+{
+	ec_write(REG_DISPLAY_BRIGHTNESS, level);
+	PRINTK_DBG("Current brightness level : 0x%x\n", level);
+
+	return;
+}
+
 #ifdef	CONFIG_PROC_FS
+#define	PROC_BUF_SIZE	128
+unsigned char proc_buf[PROC_BUF_SIZE];
+
 static int brg_proc_read(char *page, char **start, off_t off, int count, int *eof, void *data);
+static int brg_proc_write(struct file *file, const char *buf, unsigned long len, void *ppos);
 static struct proc_dir_entry *brg_proc_entry;
 
 static int brg_proc_read(char *page, char **start, off_t off, int count, int *eof, void *data)
@@ -73,11 +88,46 @@ static int brg_proc_read(char *page, char **start, off_t off, int count, int *eo
 	}
 	*start = page + off;
 	if(ret > count){
-		ret = count;}
+		ret = count;
+	}
 	if(ret < 0){
-		ret = 0;}
+		ret = 0;
+	}
 
 	return ret;
+}
+
+/*
+ * brg_proc_write :
+ *	get the upper layer's action and take action.
+ */
+static int brg_proc_write(struct file *file, const char *buf, unsigned long len, void *ppos)
+{
+	int level;
+	
+	if(len > PROC_BUF_SIZE){
+		PRINTK_DBG("err: size too big\n");
+		return -ENOMEM;
+	}
+	if(copy_from_user(proc_buf, buf, len)){
+		PRINTK_DBG("err: copy from user error\n");
+		return -EFAULT;
+	}
+	proc_buf[len] = '\0';
+
+	PRINTK_DBG("proc_buf : %s\n", proc_buf);
+	/* To provide for the application layer interface, 
+	 * randomized controlled backlight brightness. 
+	 * huangwei 2009-07-23
+	 */
+	level = simple_strtol(proc_buf, NULL, 16);
+	if( level >= 0x0 && level <= 0x8 ){
+		brightness_level_control(level);
+		PRINTK_DBG(KERN_DEBUG "CMD_BRIGHTNESS_LEVEL\n");
+		return len;
+	}
+	
+	return len;
 }
 #endif
 
@@ -108,7 +158,7 @@ static int __init brg_init(void)
 {
 	int ret;
 
-	printk(KERN_ERR "Backlight Brightness control on KB3310B Embedded Controller init.\n");
+	printk(KERN_ERR "Backlight Brightness control handler on KB3310B Embedded Controller init.\n");
 
 	brightness_tsk = kthread_create(brightness_manager, NULL, "bklight_manager");
 	if (IS_ERR(brightness_tsk)) {
@@ -133,7 +183,7 @@ static int __init brg_init(void)
 	brg_proc_entry->owner = THIS_MODULE;
 #endif
 	brg_proc_entry->read_proc = brg_proc_read;
-	brg_proc_entry->write_proc = NULL;
+	brg_proc_entry->write_proc = brg_proc_write;
 	brg_proc_entry->data = NULL;
 #endif
 
@@ -152,8 +202,8 @@ static void __exit brg_exit(void)
 #ifdef	CONFIG_PROC_FS
 	remove_proc_entry(EC_BRG_DEV, NULL);
 #endif
-
 	kthread_stop(brightness_tsk);
+	printk(KERN_INFO "Backlight brightness control handler on KB3310B Embedded Controller exit.\n");
 }
 
 module_init(brg_init);

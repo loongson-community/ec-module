@@ -271,6 +271,7 @@ static void sci_lcd_power(unsigned char flag)
 	return;
 }
 
+#if 0
 static void brightness_level_control(unsigned char level)
 {
 	ec_write(REG_DISPLAY_BRIGHTNESS, level);
@@ -278,6 +279,7 @@ static void brightness_level_control(unsigned char level)
 
 	return;
 }
+#endif
 
 static void sci_brightness_write(unsigned char flag)
 {
@@ -481,7 +483,7 @@ static ssize_t sci_proc_read(struct file *file, char *buf, size_t len, loff_t *p
 static ssize_t sci_proc_write(struct file *file, const char *buf, size_t len, loff_t *ppos)
 {
 	int i;
-	int level;
+	//int level;
 	
 	if(len > PROC_BUF_SIZE){
 		PRINTK_DBG("err: size too big\n");
@@ -500,6 +502,7 @@ static ssize_t sci_proc_write(struct file *file, const char *buf, size_t len, lo
 			sci_cmd = i;
 			break;
 		}
+#if 0
 		PRINTK_DBG("i = %d\n", i);
 		if(i >= SCI_ACTION_COUNT - 1){
 			/* To provide for the application layer interface, 
@@ -513,6 +516,7 @@ static ssize_t sci_proc_write(struct file *file, const char *buf, size_t len, lo
 				return len;
 			}
 		}
+#endif
 	}
 	if(i == SCI_ACTION_COUNT)
 		sci_cmd = CMD_NONE;

@@ -7,6 +7,6 @@
  modules.order
  version.h
  .tmp_versions
- tags
  *.patch
  char*
+ tags
