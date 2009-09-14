@@ -13,7 +13,7 @@
 #include	<asm/system.h>
 #include 	<linux/version.h>
 
-#define VERSION		"1.38t4_brightness"
+#define VERSION		"1.38"
 
 /* 
  * The following registers are determined by the EC index configuration.
